@@ -9,6 +9,7 @@ using EasyNetQ.DI.Ninject;
 using EasyNetQ.DI.SimpleInjector;
 using EasyNetQ.DI.StructureMap;
 using EasyNetQ.DI.Windsor;
+using LightInject;
 using Ninject;
 using Xunit;
 using LightInjectContainer = LightInject.ServiceContainer;
@@ -134,7 +135,7 @@ namespace EasyNetQ.DI.Tests
             {
                 (ResolverFactory) (c =>
                 {
-                    var container = new SimpleInjectorContainer {Options = {AllowOverridingRegistrations = true}};
+                    var container = new SimpleInjectorContainer { Options = { AllowOverridingRegistrations = true } };
                     c(new SimpleInjectorAdapter(container));
                     return container.GetInstance<IServiceResolver>();
                 })

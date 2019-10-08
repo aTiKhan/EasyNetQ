@@ -13,7 +13,7 @@ using Xunit;
 
 namespace EasyNetQ.Tests.MessageVersioningTests
 {
-    public class VersionedPublishExchangeDeclareStrategyTests
+    public class VersionedExchangeDeclareStrategyTests
     {
         private class ExchangeStub : IExchange
         {
@@ -45,16 +45,16 @@ namespace EasyNetQ.Tests.MessageVersioningTests
             var conventions = Substitute.For<IConventions>();
             conventions.ExchangeNamingConvention = t => t.Name;
 
-            var publishExchangeDeclareStrategy = new VersionedPublishExchangeDeclareStrategy(conventions, advancedBus);
+            var exchangeDeclareStrategy = new VersionedExchangeDeclareStrategy(conventions, advancedBus);
             try
             {
-                publishExchangeDeclareStrategy.DeclareExchange(exchangeName, ExchangeType.Topic);
+                exchangeDeclareStrategy.DeclareExchange(exchangeName, ExchangeType.Topic);
             }
             catch (Exception)
             {
             }
 
-            var declaredExchange = publishExchangeDeclareStrategy.DeclareExchange(exchangeName, ExchangeType.Topic);
+            var declaredExchange = exchangeDeclareStrategy.DeclareExchange(exchangeName, ExchangeType.Topic);
             advancedBus.Received(2).ExchangeDeclareAsync(exchangeName, Arg.Any<Action<IExchangeDeclareConfiguration>>());
             declaredExchange.Should().BeSameAs(exchange);
             exchangeDeclareCount.Should().Be(1);
@@ -62,7 +62,7 @@ namespace EasyNetQ.Tests.MessageVersioningTests
 
 
         // Unversioned message - exchange declared
-        // Versioned message - superceded exchange declared, then superceding, then bind
+        // Versioned message - superseded exchange declared, then superseding, then bind
         [Fact]
         public void When_declaring_exchanges_for_unversioned_message_one_exchange_created()
         {
@@ -71,7 +71,7 @@ namespace EasyNetQ.Tests.MessageVersioningTests
             advancedBus.ExchangeDeclareAsync(null, null)
                 .ReturnsForAnyArgs(mi =>
                 {
-                    var exchange = new ExchangeStub {Name = (string) mi[0]};
+                    var exchange = new ExchangeStub { Name = (string)mi[0] };
                     exchanges.Add(exchange);
                     return Task.FromResult<IExchange>(exchange);
                 });
@@ -88,7 +88,7 @@ namespace EasyNetQ.Tests.MessageVersioningTests
             var conventions = Substitute.For<IConventions>();
             conventions.ExchangeNamingConvention = t => t.Name;
 
-            var publishExchangeStrategy = new VersionedPublishExchangeDeclareStrategy(conventions, advancedBus);
+            var publishExchangeStrategy = new VersionedExchangeDeclareStrategy(conventions, advancedBus);
 
             publishExchangeStrategy.DeclareExchange(typeof(MyMessage), ExchangeType.Topic);
 
@@ -106,7 +106,7 @@ namespace EasyNetQ.Tests.MessageVersioningTests
             advancedBus.ExchangeDeclareAsync(null, null)
                 .ReturnsForAnyArgs(mi =>
                 {
-                    var exchange = new ExchangeStub {Name = (string) mi[0]};
+                    var exchange = new ExchangeStub { Name = (string)mi[0] };
                     exchanges.Add(exchange);
                     return Task.FromResult<IExchange>(exchange);
                 });
@@ -122,8 +122,8 @@ namespace EasyNetQ.Tests.MessageVersioningTests
 
             var conventions = Substitute.For<IConventions>();
             conventions.ExchangeNamingConvention = t => t.Name;
-
-            var publishExchangeStrategy = new VersionedPublishExchangeDeclareStrategy(conventions, advancedBus);
+            
+            var publishExchangeStrategy = new VersionedExchangeDeclareStrategy(conventions, advancedBus);
 
             publishExchangeStrategy.DeclareExchange(typeof(MyMessageV2), ExchangeType.Topic);
 

@@ -3,10 +3,10 @@ using System.Threading;
 using EasyNetQ.AmqpExceptions;
 using EasyNetQ.Events;
 using EasyNetQ.Logging;
+using EasyNetQ.Sprache;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
-using Sprache;
 
 namespace EasyNetQ.Producer
 {
@@ -14,12 +14,12 @@ namespace EasyNetQ.Producer
     {
         private const int MinRetryTimeoutMs = 50;
         private const int MaxRetryTimeoutMs = 5000;
-        
-        private readonly ILog logger = LogProvider.For<PersistentChannel>();
         private readonly ConnectionConfiguration configuration;
         private readonly IPersistentConnection connection;
         private readonly IEventBus eventBus;
-        private IModel internalChannel;
+
+        private readonly ILog logger = LogProvider.For<PersistentChannel>();
+        private IModel channel;
 
         public PersistentChannel(
             IPersistentConnection connection,
@@ -31,103 +31,54 @@ namespace EasyNetQ.Producer
             Preconditions.CheckNotNull(configuration, "configuration");
             Preconditions.CheckNotNull(eventBus, "eventBus");
 
-            this.connection = connection;
             this.configuration = configuration;
+            this.connection = connection;
             this.eventBus = eventBus;
-
-            WireUpEvents();
         }
 
         public void InvokeChannelAction(Action<IModel> channelAction)
         {
             Preconditions.CheckNotNull(channelAction, "channelAction");
-            
+
             var timeout = configuration.Timeout.Equals(0)
                 ? TimeBudget.Infinite()
                 : TimeBudget.Start(TimeSpan.FromSeconds(configuration.Timeout));
-            
+
             var retryTimeoutMs = MinRetryTimeoutMs;
             while (!timeout.IsExpired())
             {
                 try
                 {
-                    var channel = OpenChannel();
-                    channelAction(channel);
+                    channelAction(channel ?? (channel = CreateChannel()));
                     return;
                 }
                 catch (OperationInterruptedException exception)
                 {
-                    CloseChannel();
-                    if (NeedRethrow(exception))
-                    {
-                        throw;
-                    }
+                    if (NeedRethrow(exception)) throw;
                 }
                 catch (EasyNetQException)
                 {
-                    CloseChannel();
                 }
 
                 Thread.Sleep(retryTimeoutMs);
 
                 retryTimeoutMs = Math.Min(retryTimeoutMs * 2, MaxRetryTimeoutMs);
             }
-            
+
             logger.Error("Channel action timed out");
             throw new TimeoutException("The operation requested on PersistentChannel timed out");
         }
 
         public void Dispose()
         {
-            CloseChannel();
+            channel?.Dispose();
         }
 
-        private void WireUpEvents()
+        private IModel CreateChannel()
         {
-            eventBus.Subscribe<ConnectionDisconnectedEvent>(OnConnectionDisconnected);
-            eventBus.Subscribe<ConnectionCreatedEvent>(ConnectionOnConnected);
-        }
-
-        private void OnConnectionDisconnected(ConnectionDisconnectedEvent @event)
-        {
-            CloseChannel();
-        }
-
-        private void ConnectionOnConnected(ConnectionCreatedEvent @event)
-        {
-            try
-            {
-                OpenChannel();
-            }
-            catch (OperationInterruptedException)
-            {
-            }
-            catch (EasyNetQException)
-            {
-            }
-        }
-
-        private IModel OpenChannel()
-        {
-            IModel channel;
-
-            lock (this)
-            {
-                if (internalChannel != null)
-                {
-                    return internalChannel;
-                }
-
-                channel = connection.CreateModel();
-
-                WireUpChannelEvents(channel);
-
-                eventBus.Publish(new PublishChannelCreatedEvent(channel));
-
-                internalChannel = channel;
-            }
-
-            logger.Debug("Persistent channel connected");
+            var channel = connection.CreateModel();
+            WireUpChannelEvents(channel);
+            eventBus.Publish(new PublishChannelCreatedEvent(channel));
             return channel;
         }
 
@@ -142,13 +93,26 @@ namespace EasyNetQ.Producer
             }
 
             channel.BasicReturn += OnReturn;
+
+            if (channel is IRecoverable recoverable)
+                recoverable.Recovery += OnConnectionRestored;
+            else
+                throw new NotSupportedException("Non-recoverable channel is not supported");
+        }
+
+        private void OnConnectionRestored(object sender, EventArgs e)
+        {
+            eventBus.Publish(new PublishChannelCreatedEvent((IModel) sender));
         }
 
         private void OnReturn(object sender, BasicReturnEventArgs args)
         {
-            eventBus.Publish(new ReturnedMessageEvent(args.Body,
+            var returnedMessageEvent = new ReturnedMessageEvent(
+                args.Body,
                 new MessageProperties(args.BasicProperties),
-                new MessageReturnedInfo(args.Exchange, args.RoutingKey, args.ReplyText)));
+                new MessageReturnedInfo(args.Exchange, args.RoutingKey, args.ReplyText)
+            );
+            eventBus.Publish(returnedMessageEvent);
         }
 
         private void OnAck(object sender, BasicAckEventArgs args)
@@ -158,27 +122,7 @@ namespace EasyNetQ.Producer
 
         private void OnNack(object sender, BasicNackEventArgs args)
         {
-            eventBus.Publish(MessageConfirmationEvent.Nack((IModel)sender, args.DeliveryTag, args.Multiple));
-        }
-
-        private void CloseChannel()
-        {
-            lock (this)
-            {
-                if (internalChannel == null)
-                {
-                    return;
-                }
-                if (configuration.PublisherConfirms)
-                {
-                    internalChannel.BasicAcks -= OnAck;
-                    internalChannel.BasicNacks -= OnNack;
-                }
-                internalChannel.BasicReturn -= OnReturn;
-                internalChannel = null;
-            }
-
-            logger.Debug("Persistent channel disconnected");
+            eventBus.Publish(MessageConfirmationEvent.Nack((IModel) sender, args.DeliveryTag, args.Multiple));
         }
 
         private static bool NeedRethrow(OperationInterruptedException exception)
