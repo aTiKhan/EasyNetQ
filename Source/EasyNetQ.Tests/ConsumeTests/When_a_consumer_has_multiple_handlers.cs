@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using System.Threading;
@@ -6,13 +6,18 @@ using EasyNetQ.Consumer;
 using EasyNetQ.Tests.Mocking;
 using EasyNetQ.Topology;
 using FluentAssertions;
-using RabbitMQ.Client.Framing;
 using Xunit;
 
 namespace EasyNetQ.Tests.ConsumeTests
 {
     public class When_a_consumer_has_multiple_handlers : IDisposable
     {
+        private readonly MockBuilder mockBuilder;
+        private IAnimal animalResult;
+
+        private MyMessage myMessageResult;
+        private MyOtherMessage myOtherMessageResult;
+
         public When_a_consumer_has_multiple_handlers()
         {
             mockBuilder = new MockBuilder();
@@ -49,18 +54,12 @@ namespace EasyNetQ.Tests.ConsumeTests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
-
-        private readonly MockBuilder mockBuilder;
-
-        private MyMessage myMessageResult;
-        private MyOtherMessage myOtherMessageResult;
-        private IAnimal animalResult;
 
         private void Deliver<T>(T message) where T : class
         {
-            var body = new JsonSerializer().MessageToBytes(typeof(T), message);
+            using var serializedMessage = new JsonSerializer().MessageToBytes(typeof(T), message);
             var properties = new BasicProperties
             {
                 Type = new DefaultTypeNameSerializer().Serialize(typeof(T))
@@ -73,12 +72,12 @@ namespace EasyNetQ.Tests.ConsumeTests
                 "exchange",
                 "routing_key",
                 properties,
-                body
-            );
+                serializedMessage.Memory
+            ).GetAwaiter().GetResult();
         }
 
         [Fact]
-        public void Should_deliver_a_ploymorphic_message()
+        public void Should_deliver_a_polymorphic_message()
         {
             animalResult.Should().NotBeNull();
             animalResult.Should().BeOfType<Dog>();

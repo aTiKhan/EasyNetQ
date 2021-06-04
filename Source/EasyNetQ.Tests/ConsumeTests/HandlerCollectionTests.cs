@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using EasyNetQ.Consumer;
 using FluentAssertions;
@@ -8,7 +8,7 @@ namespace EasyNetQ.Tests.ConsumeTests
 {
     public class HandlerCollectionTests
     {
-        private IHandlerCollection handlerCollection;
+        private readonly IHandlerCollection handlerCollection;
 
         private bool myMessageHandlerExecuted = false;
         private bool animalHandlerExecuted = false;
@@ -17,7 +17,7 @@ namespace EasyNetQ.Tests.ConsumeTests
         {
             handlerCollection = new HandlerCollection();
 
-            handlerCollection.Add<MyMessage>((message, info) => 
+            handlerCollection.Add<MyMessage>((message, info) =>
                 {
                     myMessageHandlerExecuted = true;
                 });

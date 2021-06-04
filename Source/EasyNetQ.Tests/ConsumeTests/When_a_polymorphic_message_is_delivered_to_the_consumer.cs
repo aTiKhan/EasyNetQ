@@ -1,19 +1,19 @@
-﻿// ReSharper disable InconsistentNaming
-using System;
-using FluentAssertions;
-using System.Threading;
-using System.Threading.Tasks;
+// ReSharper disable InconsistentNaming
 using EasyNetQ.Tests.Mocking;
 using EasyNetQ.Topology;
+using FluentAssertions;
 using RabbitMQ.Client.Framing;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace EasyNetQ.Tests.ConsumeTests
 {
     public class When_a_polymorphic_message_is_delivered_to_the_consumer : IDisposable
     {
-        private MockBuilder mockBuilder;
-        ITestMessageInterface receivedMessage;
+        private readonly MockBuilder mockBuilder;
+        private ITestMessageInterface receivedMessage;
 
         public When_a_polymorphic_message_is_delivered_to_the_consumer()
         {
@@ -29,11 +29,11 @@ namespace EasyNetQ.Tests.ConsumeTests
                 }));
 
             var publishedMessage = new Implementation { Text = "Hello Polymorphs!" };
-            var body = new JsonSerializer().MessageToBytes(typeof(Implementation), publishedMessage);
+            var serializedMessage = new JsonSerializer().MessageToBytes(typeof(Implementation), publishedMessage);
             var properties = new BasicProperties
-                {
-                    Type = new DefaultTypeNameSerializer().Serialize(typeof(Implementation))
-                };
+            {
+                Type = new DefaultTypeNameSerializer().Serialize(typeof(Implementation))
+            };
 
             mockBuilder.Consumers[0].HandleBasicDeliver(
                 "consumer_tag",
@@ -42,8 +42,8 @@ namespace EasyNetQ.Tests.ConsumeTests
                 "exchange",
                 "routing_key",
                 properties,
-                body
-                );
+                serializedMessage.Memory
+            );
 
             if (!are.WaitOne(5000))
             {
@@ -53,7 +53,7 @@ namespace EasyNetQ.Tests.ConsumeTests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
         [Fact]

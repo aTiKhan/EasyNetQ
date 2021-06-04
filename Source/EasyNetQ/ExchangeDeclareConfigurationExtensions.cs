@@ -2,6 +2,9 @@ using EasyNetQ.Topology;
 
 namespace EasyNetQ
 {
+    /// <summary>
+    ///     Various extensions for IExchangeDeclareConfiguration
+    /// </summary>
     public static class ExchangeDeclareConfigurationExtensions
     {
         /// <summary>
@@ -10,7 +13,9 @@ namespace EasyNetQ
         /// <param name="configuration">The configuration instance</param>
         /// <param name="alternateExchange">The alternate exchange to set</param>
         /// <returns>IQueueDeclareConfiguration</returns>
-        public static IExchangeDeclareConfiguration WithAlternateExchange(this IExchangeDeclareConfiguration configuration, IExchange alternateExchange)
+        public static IExchangeDeclareConfiguration WithAlternateExchange(
+            this IExchangeDeclareConfiguration configuration, Exchange alternateExchange
+        )
         {
             Preconditions.CheckNotNull(configuration, "configuration");
 

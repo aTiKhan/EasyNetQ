@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using System.Collections;
@@ -19,8 +19,7 @@ namespace EasyNetQ.Tests
         {
             mockBuilder = new MockBuilder();
 
-            advancedBus = mockBuilder.Bus.Advanced;
-            queue = advancedBus.QueueDeclare(
+            queue = mockBuilder.Bus.Advanced.QueueDeclare(
                 "my_queue",
                 c => c.AsDurable(false)
                     .AsExclusive(true)
@@ -33,12 +32,11 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
-        private IQueue queue;
+        private readonly MockBuilder mockBuilder;
+        private readonly Queue queue;
 
         [Fact]
         public void Should_declare_the_queue()
@@ -49,9 +47,9 @@ namespace EasyNetQ.Tests
                 Arg.Is(true),
                 Arg.Is(true),
                 Arg.Is<IDictionary<string, object>>(args =>
-                    ((int) args["x-message-ttl"] == 1000) &&
-                    ((int) args["x-expires"] == 2000) &&
-                    ((int) args["x-max-priority"] == 10)));
+                    ((int)args["x-message-ttl"] == 1000) &&
+                    ((int)args["x-expires"] == 2000) &&
+                    ((int)args["x-max-priority"] == 10)));
         }
 
         [Fact]
@@ -68,7 +66,7 @@ namespace EasyNetQ.Tests
         {
             mockBuilder = new MockBuilder();
 
-            advancedBus = mockBuilder.Bus.Advanced;
+            var advancedBus = mockBuilder.Bus.Advanced;
             queue = advancedBus.QueueDeclare(
                 "my_queue",
                 c => c.AsDurable(false)
@@ -84,12 +82,11 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
-        private IQueue queue;
+        private readonly MockBuilder mockBuilder;
+        private Queue queue;
 
         [Fact]
         public void Should_declare_the_queue()
@@ -100,11 +97,11 @@ namespace EasyNetQ.Tests
                 Arg.Is(true),
                 Arg.Is(true),
                 Arg.Is<IDictionary<string, object>>(args =>
-                    ((int) args["x-message-ttl"] == 1000) &&
-                    ((int) args["x-expires"] == 2000) &&
-                    ((int) args["x-max-priority"] == 10) &&
-                    ((string) args["x-dead-letter-exchange"] == "my_exchange") &&
-                    ((string) args["x-dead-letter-routing-key"] == "my_routing_key")));
+                    ((int)args["x-message-ttl"] == 1000) &&
+                    ((int)args["x-expires"] == 2000) &&
+                    ((int)args["x-max-priority"] == 10) &&
+                    ((string)args["x-dead-letter-exchange"] == "my_exchange") &&
+                    ((string)args["x-dead-letter-routing-key"] == "my_routing_key")));
         }
 
         [Fact]
@@ -121,8 +118,7 @@ namespace EasyNetQ.Tests
         {
             mockBuilder = new MockBuilder();
 
-            advancedBus = mockBuilder.Bus.Advanced;
-            queue = advancedBus.QueueDeclare(
+            queue = mockBuilder.Bus.Advanced.QueueDeclare(
                 "my_queue",
                 c => c.AsDurable(false)
                     .AsExclusive(true)
@@ -130,19 +126,18 @@ namespace EasyNetQ.Tests
                     .WithMessageTtl(TimeSpan.FromSeconds(1))
                     .WithExpires(TimeSpan.FromSeconds(2))
                     .WithMaxPriority(10)
-                    .WithDeadLetterExchange(Exchange.GetDefault())
+                    .WithDeadLetterExchange(Exchange.Default)
                     .WithDeadLetterRoutingKey("my_queue2")
             );
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
-        private IQueue queue;
+        private readonly MockBuilder mockBuilder;
+        private readonly Queue queue;
 
         [Fact]
         public void Should_declare_the_queue()
@@ -153,11 +148,11 @@ namespace EasyNetQ.Tests
                 Arg.Is(true),
                 Arg.Is(true),
                 Arg.Is<IDictionary<string, object>>(args =>
-                    ((int) args["x-message-ttl"] == 1000) &&
-                    ((int) args["x-expires"] == 2000) &&
-                    ((int) args["x-max-priority"] == 10) &&
-                    ((string) args["x-dead-letter-exchange"] == "") &&
-                    ((string) args["x-dead-letter-routing-key"] == "my_queue2")));
+                    ((int)args["x-message-ttl"] == 1000) &&
+                    ((int)args["x-expires"] == 2000) &&
+                    ((int)args["x-max-priority"] == 10) &&
+                    ((string)args["x-dead-letter-exchange"] == "") &&
+                    ((string)args["x-dead-letter-routing-key"] == "my_queue2")));
         }
 
         [Fact]
@@ -173,19 +168,17 @@ namespace EasyNetQ.Tests
         public When_a_queue_is_deleted()
         {
             mockBuilder = new MockBuilder();
-            advancedBus = mockBuilder.Bus.Advanced;
 
             var queue = new Queue("my_queue", false);
-            advancedBus.QueueDelete(queue);
+            mockBuilder.Bus.Advanced.QueueDelete(queue);
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
+        private readonly MockBuilder mockBuilder;
 
         [Fact]
         public void Should_delete_the_queue()
@@ -199,12 +192,11 @@ namespace EasyNetQ.Tests
         public When_an_exchange_is_declared()
         {
             mockBuilder = new MockBuilder();
-            advancedBus = mockBuilder.Bus.Advanced;
 
             mockBuilder.NextModel.WhenForAnyArgs(x => x.ExchangeDeclare(null, null, false, false, null))
                 .Do(x => { arguments = x[4] as IDictionary; });
 
-            exchange = advancedBus.ExchangeDeclare(
+            exchange = mockBuilder.Bus.Advanced.ExchangeDeclare(
                 "my_exchange",
                 c => c.WithType(ExchangeType.Direct)
                     .AsDurable(false)
@@ -215,12 +207,11 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
-        private IExchange exchange;
+        private readonly MockBuilder mockBuilder;
+        private readonly Exchange exchange;
         private IDictionary arguments;
 
         [Fact]
@@ -254,18 +245,16 @@ namespace EasyNetQ.Tests
         public When_an_exchange_is_declared_passively()
         {
             mockBuilder = new MockBuilder();
-            advancedBus = mockBuilder.Bus.Advanced;
 
-            advancedBus.ExchangeDeclarePassive("my_exchange");
+            mockBuilder.Bus.Advanced.ExchangeDeclarePassive("my_exchange");
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
+        private readonly MockBuilder mockBuilder;
 
         [Fact]
         public void Should_passively_declare_exchange()
@@ -280,19 +269,17 @@ namespace EasyNetQ.Tests
         public When_an_exchange_is_deleted()
         {
             mockBuilder = new MockBuilder();
-            advancedBus = mockBuilder.Bus.Advanced;
 
             var exchange = new Exchange("my_exchange");
-            advancedBus.ExchangeDelete(exchange);
+            mockBuilder.Bus.Advanced.ExchangeDelete(exchange);
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private IAdvancedBus advancedBus;
+        private readonly MockBuilder mockBuilder;
 
         [Fact]
         public void Should_delete_the_queue()
@@ -309,28 +296,28 @@ namespace EasyNetQ.Tests
             advancedBus = mockBuilder.Bus.Advanced;
 
             var exchange = new Exchange("my_exchange");
-            var queue = new Topology.Queue("my_queue", false);
+            var queue = new Queue("my_queue", false);
 
             binding = advancedBus.Bind(exchange, queue, "my_routing_key");
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
         private IAdvancedBus advancedBus;
-        private IBinding binding;
+        private readonly Binding<Queue> binding;
 
         [Fact]
         public void Should_create_a_binding_instance()
         {
             binding.Should().NotBeNull();
             binding.RoutingKey.Should().Be("my_routing_key");
-            binding.Exchange.Name.Should().Be("my_exchange");
-            binding.Bindable.Should().BeAssignableTo<IQueue>();
-            ((IQueue) binding.Bindable).Name.Should().Be("my_queue");
+            binding.Source.Name.Should().Be("my_exchange");
+            binding.Destination.Should().BeAssignableTo<Queue>();
+            binding.Destination.Name.Should().Be("my_queue");
         }
 
         [Fact]
@@ -340,7 +327,8 @@ namespace EasyNetQ.Tests
                 Arg.Is("my_queue"),
                 Arg.Is("my_exchange"),
                 Arg.Is("my_routing_key"),
-                Arg.Is<Dictionary<string, object>>(x => x.SequenceEqual(new Dictionary<string, object>())));
+                Arg.Is((IDictionary<string, object>)null)
+            );
         }
     }
 
@@ -352,35 +340,35 @@ namespace EasyNetQ.Tests
             advancedBus = mockBuilder.Bus.Advanced;
 
             var exchange = new Exchange("my_exchange");
-            var queue = new Topology.Queue("my_queue", false);
+            var queue = new Queue("my_queue", false);
 
-            binding = advancedBus.Bind(exchange, queue, "my_routing_key", new Dictionary<string, object> {["header1"] = "value1"});
+            binding = advancedBus.Bind(exchange, queue, "my_routing_key", new Dictionary<string, object> { ["header1"] = "value1" });
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
         private IAdvancedBus advancedBus;
-        private IBinding binding;
+        private readonly Binding<Queue> binding;
 
         [Fact]
         public void Should_create_a_binding_instance()
         {
             binding.Should().NotBeNull();
             binding.RoutingKey.Should().Be("my_routing_key");
-            binding.Exchange.Name.Should().Be("my_exchange");
+            binding.Source.Name.Should().Be("my_exchange");
             binding.Arguments["header1"].Should().Be("value1");
-            binding.Bindable.Should().BeAssignableTo<IQueue>();
-            ((IQueue) binding.Bindable).Name.Should().Be("my_queue");
+            binding.Destination.Should().BeAssignableTo<Queue>();
+            binding.Destination.Name.Should().Be("my_queue");
         }
 
         [Fact]
         public void Should_declare_a_binding()
         {
-            var expectedHeaders = new Dictionary<string, object> {["header1"] = "value1"};
+            var expectedHeaders = new Dictionary<string, object> { ["header1"] = "value1" };
 
             mockBuilder.Channels[0].Received().QueueBind(
                 Arg.Is("my_queue"),
@@ -405,12 +393,12 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
         private IAdvancedBus advancedBus;
-        private IBinding binding;
+        private readonly Binding<Queue> binding;
 
         [Fact]
         public void Should_unbind_the_exchange()

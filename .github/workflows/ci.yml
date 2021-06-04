@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+    tags: [ '[0-9]+.[0-9]+.[0-9]+*' ]
+  pull_request:
+    branches:
+      - master
+      - develop
+
+jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-18.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        dotnet: ['5.0.x']
+      fail-fast: true
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET Core ${{ matrix.dotnet }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ matrix.dotnet }}
+
+    - name: Install & run dotnet-format
+      run: |
+        dotnet tool install -g dotnet-format --version 5.0.163101 --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-tools/nuget/v3/index.json
+        dotnet format ./Source/EasyNetQ.sln --check
+
+    - name: Patch docker connection string
+      run: sed -i -e 's/http:\/\/127.0.0.1:2375/unix:\/var\/run\/docker.sock/g' ${{ github.workspace }}/Source/EasyNetQ.IntegrationTests/settings.json
+
+    - name: Install dependencies
+      run: dotnet restore ${{ github.workspace }}/Source/EasyNetQ.sln
+
+    - name: Build
+      run: dotnet build ${{ github.workspace }}/Source/EasyNetQ.sln --configuration Release
+
+    - name: Tests
+      run: |
+        cd ${{ github.workspace }}/Source/EasyNetQ.Tests
+        dotnet test --configuration Release --no-build
+
+    - name: DI.Tests
+      run: |
+        cd ${{ github.workspace }}/Source/EasyNetQ.DI.Tests
+        dotnet test --configuration Release --no-build
+
+    - name: Hosepipe.Tests
+      run: |
+        cd ${{ github.workspace }}/Source/EasyNetQ.Hosepipe.Tests
+        dotnet test --configuration Release --no-build --filter "(Category!=Explicit)"
+
+    - name: Integration Tests
+      run: |
+        cd ${{ github.workspace }}/Source/EasyNetQ.IntegrationTests
+        dotnet test --configuration Release --no-build
+
+  publish-to-nuget:
+    name: Publish to NuGet
+    runs-on: ubuntu-18.04
+    needs: test
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup .NET Core ${{ matrix.dotnet }}
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '5.0.x'
+      - name: Install dependencies
+        run: dotnet restore ${{ github.workspace }}/Source/EasyNetQ.sln
+      - name: Build
+        run: dotnet build ${{ github.workspace }}/Source/EasyNetQ.sln --configuration Release
+      - name: Pack
+        run: dotnet pack ${{ github.workspace }}/Source/EasyNetQ.sln --configuration Release --no-build --include-symbols --output ${{ github.workspace }}/Packages
+      - name: Publish
+        run: dotnet nuget push '${{ github.workspace }}/Packages/*.*' --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_TOKEN }}

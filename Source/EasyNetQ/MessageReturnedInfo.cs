@@ -1,4 +1,4 @@
-﻿namespace EasyNetQ
+namespace EasyNetQ
 {
     public class MessageReturnedInfo
     {
@@ -7,15 +7,15 @@
         public string ReturnReason { get; }
 
         public MessageReturnedInfo(
-            string exchange, 
-            string routingKey, 
+            string exchange,
+            string routingKey,
             string returnReason
         )
         {
             Preconditions.CheckNotNull(exchange, "exchange");
             Preconditions.CheckNotNull(routingKey, "routingKey");
             Preconditions.CheckNotNull(returnReason, "returnReason");
-            
+
             Exchange = exchange;
             RoutingKey = routingKey;
             ReturnReason = returnReason;

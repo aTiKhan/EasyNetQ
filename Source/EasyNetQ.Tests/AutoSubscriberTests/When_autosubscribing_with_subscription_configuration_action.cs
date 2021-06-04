@@ -1,15 +1,12 @@
-﻿// ReSharper disable InconsistentNaming
-using System;
+// ReSharper disable InconsistentNaming
 using EasyNetQ.AutoSubscribe;
-using Xunit;
+using EasyNetQ.Internals;
+using FluentAssertions;
 using NSubstitute;
-using System.Reflection;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
-using EasyNetQ.FluentConfiguration;
-using EasyNetQ.Internals;
-using EasyNetQ.Producer;
-using FluentAssertions;
+using Xunit;
 
 namespace EasyNetQ.Tests.AutoSubscriberTests
 {
@@ -26,20 +23,20 @@ namespace EasyNetQ.Tests.AutoSubscriberTests
             bus.PubSub.Returns(pubSub);
 
             var autoSubscriber = new AutoSubscriber(bus, "my_app")
-                {
-                        ConfigureSubscriptionConfiguration =
+            {
+                ConfigureSubscriptionConfiguration =
                                 c => c.WithAutoDelete()
                                     .WithExpires(10)
                                     .WithPrefetchCount(10)
                                     .WithPriority(10)
-                };
-            
+            };
+
             pubSub.SubscribeAsync(
-                    Arg.Is("MyActionTest"), 
+                    Arg.Is("MyActionTest"),
                     Arg.Any<Func<MessageA, CancellationToken, Task>>(),
                     Arg.Any<Action<ISubscriptionConfiguration>>()
                 )
-                .Returns(TaskHelpers.FromResult(Substitute.For<ISubscriptionResult>()).ToAwaitableDisposable())
+                .Returns(Task.FromResult(new SubscriptionResult()).ToAwaitableDisposable())
                 .AndDoes(a => capturedAction = (Action<ISubscriptionConfiguration>)a.Args()[2]);
 
             autoSubscriber.Subscribe(new[] { typeof(MyConsumerWithAction) });
@@ -64,7 +61,7 @@ namespace EasyNetQ.Tests.AutoSubscriberTests
         public void Should_have_called_subscribe_with_action_capable_of_configuring_subscription()
         {
             var subscriptionConfiguration = new SubscriptionConfiguration(1);
-            
+
             capturedAction(subscriptionConfiguration);
 
             subscriptionConfiguration.AutoDelete.Should().BeTrue();

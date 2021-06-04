@@ -1,4 +1,5 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ namespace EasyNetQ.Tests.ConsumeTests
 {
     public class When_a_consumer_is_cancelled_by_the_broker : IDisposable
     {
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
 
         public When_a_consumer_is_cancelled_by_the_broker()
         {
@@ -20,12 +21,16 @@ namespace EasyNetQ.Tests.ConsumeTests
 
             var queue = new Queue("my_queue", false);
 
-            mockBuilder.Bus.Advanced.Consume(queue, (bytes, properties, arg3) => Task.Run(() => { }));
+            mockBuilder.Bus.Advanced.Consume(
+                queue,
+                (bytes, properties, arg3) => Task.Run(() => { }),
+                c => c.WithConsumerTag("consumer_tag")
+            );
 
             var are = new AutoResetEvent(false);
             mockBuilder.EventBus.Subscribe<ConsumerModelDisposedEvent>(x => are.Set());
 
-            mockBuilder.Consumers[0].HandleBasicCancel("consumer_tag");
+            mockBuilder.Consumers[0].HandleBasicCancel("consumer_tag").GetAwaiter().GetResult();
 
             if (!are.WaitOne(5000))
             {
@@ -35,7 +40,7 @@ namespace EasyNetQ.Tests.ConsumeTests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
         [Fact]

@@ -1,31 +1,48 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using RabbitMQ.Client;
+using System;
 
 namespace EasyNetQ.Consumer
 {
-    public class ConsumerExecutionContext
+    /// <summary>
+    ///     Represent context of an executing message
+    /// </summary>
+    public readonly struct ConsumerExecutionContext
     {
-        public Func<byte[], MessageProperties, MessageReceivedInfo, CancellationToken, Task> UserHandler { get; }
-        public MessageReceivedInfo Info { get; }
-        public MessageProperties Properties { get; }
-        public byte[] Body { get; }
+        /// <summary>
+        ///     Message handler
+        /// </summary>
+        public MessageHandler Handler { get; }
 
+        /// <summary>
+        ///     Message received info
+        /// </summary>
+        public MessageReceivedInfo ReceivedInfo { get; }
+
+        /// <summary>
+        ///     Message properties
+        /// </summary>
+        public MessageProperties Properties { get; }
+
+        /// <summary>
+        ///     Message body
+        /// </summary>
+        public ReadOnlyMemory<byte> Body { get; }
+
+        /// <summary>
+        ///     Creates ConsumerExecutionContext
+        /// </summary>
         public ConsumerExecutionContext(
-            Func<byte[], MessageProperties, MessageReceivedInfo, CancellationToken, Task> userHandler, 
-            MessageReceivedInfo info, 
-            MessageProperties properties, 
-            byte[] body
+            MessageHandler handler,
+            MessageReceivedInfo receivedInfo,
+            MessageProperties properties,
+            ReadOnlyMemory<byte> body
         )
         {
-            Preconditions.CheckNotNull(userHandler, "userHandler");
-            Preconditions.CheckNotNull(info, "info");
-            Preconditions.CheckNotNull(properties, "properties");
-            Preconditions.CheckNotNull(body, "body");
+            Preconditions.CheckNotNull(handler, nameof(handler));
+            Preconditions.CheckNotNull(receivedInfo, nameof(receivedInfo));
+            Preconditions.CheckNotNull(properties, nameof(properties));
 
-            UserHandler = userHandler;
-            Info = info;
+            Handler = handler;
+            ReceivedInfo = receivedInfo;
             Properties = properties;
             Body = body;
         }

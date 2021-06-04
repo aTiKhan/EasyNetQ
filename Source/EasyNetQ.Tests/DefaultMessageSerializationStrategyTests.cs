@@ -1,9 +1,10 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
+using NSubstitute;
 using System;
+using System.Buffers;
 using System.Text;
 using Xunit;
-using NSubstitute;
 
 namespace EasyNetQ.Tests
 {
@@ -19,7 +20,7 @@ namespace EasyNetQ.Tests
             var message = new Message<MyMessage>(new MyMessage());
             var serializationStrategy = CreateSerializationStrategy(message, messageType, serializedMessageBody, correlationId);
 
-            var serializedMessage = serializationStrategy.SerializeMessage(message);
+            using var serializedMessage = serializationStrategy.SerializeMessage(message);
 
             AssertMessageSerializedCorrectly(serializedMessage, serializedMessageBody, messageType, correlationId);
         }
@@ -32,12 +33,12 @@ namespace EasyNetQ.Tests
             const string correlationId = "CorrelationId";
 
             var message = new Message<MyMessage>(new MyMessage())
-                {
-                    Properties = { CorrelationId = correlationId }
-                };
+            {
+                Properties = { CorrelationId = correlationId }
+            };
             var serializationStrategy = CreateSerializationStrategy(message, messageType, serializedMessageBody, "SomeOtherCorrelationId");
 
-            var serializedMessage = serializationStrategy.SerializeMessage(message);
+            using var serializedMessage = serializationStrategy.SerializeMessage(message);
 
             AssertMessageSerializedCorrectly(serializedMessage, serializedMessageBody, messageType, correlationId);
         }
@@ -77,14 +78,31 @@ namespace EasyNetQ.Tests
 
             var messageBody = new MyMessage { Text = "Hello world!" };
             var message = new Message<MyMessage>(messageBody);
-            var serializedMessage = serializationStrategy.SerializeMessage(message);
+            using var serializedMessage = serializationStrategy.SerializeMessage(message);
             var deserializedMessage = serializationStrategy.DeserializeMessage(serializedMessage.Properties, serializedMessage.Body);
 
             Assert.Equal(deserializedMessage.MessageType, message.Body.GetType());
             Assert.Equal(((Message<MyMessage>)deserializedMessage).Body.Text, message.Body.Text);
         }
 
-        private void AssertMessageSerializedCorrectly(SerializedMessage message, byte[] expectedBody, string expectedMessageType, string expectedCorrelationId)
+        [Fact]
+        public void When_using_the_default_serialization_strategy_messages_are_correctly_round_tripped_when_null()
+        {
+            var typeNameSerializer = new DefaultTypeNameSerializer();
+            var serializer = new JsonSerializer();
+            const string correlationId = "CorrelationId";
+
+            var serializationStrategy = new DefaultMessageSerializationStrategy(typeNameSerializer, serializer, new StaticCorrelationIdGenerationStrategy(correlationId));
+
+            var message = new Message<MyMessage>();
+            using var serializedMessage = serializationStrategy.SerializeMessage(message);
+            var deserializedMessage = serializationStrategy.DeserializeMessage(serializedMessage.Properties, serializedMessage.Body);
+
+            Assert.Equal(deserializedMessage.MessageType, message.MessageType);
+            Assert.Null(((Message<MyMessage>)deserializedMessage).Body);
+        }
+
+        private static void AssertMessageSerializedCorrectly(SerializedMessage message, byte[] expectedBody, string expectedMessageType, string expectedCorrelationId)
         {
             Assert.Equal(message.Body, expectedBody); //, "Serialized message body does not match expected value");
             Assert.Equal(message.Properties.Type, expectedMessageType); //, "Serialized message type does not match expected value");
@@ -98,13 +116,18 @@ namespace EasyNetQ.Tests
             Assert.Equal(message.Properties.ToString(), expectedMessageProperties); //, "Deserialized message properties do not match expected value");
         }
 
-        private static DefaultMessageSerializationStrategy CreateSerializationStrategy(IMessage<MyMessage> message, string messageType, byte[] messageBody, string correlationId)
+        private static DefaultMessageSerializationStrategy CreateSerializationStrategy(
+            IMessage<MyMessage> message, string messageType, byte[] messageBody, string correlationId
+        )
         {
             var typeNameSerializer = Substitute.For<ITypeNameSerializer>();
             typeNameSerializer.Serialize(message.MessageType).Returns(messageType);
 
             var serializer = Substitute.For<ISerializer>();
-            serializer.MessageToBytes(message.MessageType, message.GetBody()).Returns(messageBody);
+            var serializedMessage = Substitute.For<IMemoryOwner<byte>>();
+            serializedMessage.Memory.Returns(messageBody);
+
+            serializer.MessageToBytes(message.MessageType, message.GetBody()).Returns(serializedMessage);
 
             return new DefaultMessageSerializationStrategy(typeNameSerializer, serializer, new StaticCorrelationIdGenerationStrategy(correlationId));
         }

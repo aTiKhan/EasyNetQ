@@ -1,4 +1,4 @@
-﻿using EasyNetQ.Consumer;
+using EasyNetQ.Consumer;
 using EasyNetQ.Topology;
 
 namespace EasyNetQ.Events
@@ -10,9 +10,9 @@ namespace EasyNetQ.Events
     {
         public IConsumer Consumer { get; }
 
-        public IQueue Queue { get; }
+        public Queue Queue { get; }
 
-        public StartConsumingFailedEvent(IConsumer consumer, IQueue queue)
+        public StartConsumingFailedEvent(IConsumer consumer, Queue queue)
         {
             Consumer = consumer;
             Queue = queue;

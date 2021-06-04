@@ -1,9 +1,12 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
-using System;
 using EasyNetQ.Consumer;
-using Xunit;
 using NSubstitute;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace EasyNetQ.Tests.ConsumeTests
 {
@@ -13,8 +16,8 @@ namespace EasyNetQ.Tests.ConsumeTests
 
         protected override void AdditionalSetUp()
         {
-            ConsumerErrorStrategy.HandleConsumerError(null, null)
-                     .ReturnsForAnyArgs(AckStrategies.Ack);
+            ConsumerErrorStrategy.HandleConsumerErrorAsync(default, null)
+                     .ReturnsForAnyArgs(Task.FromResult(AckStrategies.Ack));
 
             exception = new Exception("I've had a bad day :(");
             StartConsumer((body, properties, info) => throw exception);
@@ -22,14 +25,15 @@ namespace EasyNetQ.Tests.ConsumeTests
         }
 
         [Fact]
-        public void Should_invoke_the_error_strategy()
+        public async Task Should_invoke_the_error_strategy()
         {
-            ConsumerErrorStrategy.Received().HandleConsumerError(
-                Arg.Is<ConsumerExecutionContext>(args => args.Info.ConsumerTag == ConsumerTag &&
-                                                           args.Info.DeliverTag == DeliverTag &&
-                                                           args.Info.Exchange == "the_exchange" &&
-                                                           args.Body == OriginalBody),
-                Arg.Is<Exception>(e => e == exception)
+            await ConsumerErrorStrategy.Received().HandleConsumerErrorAsync(
+                Arg.Is<ConsumerExecutionContext>(args => args.ReceivedInfo.ConsumerTag == ConsumerTag &&
+                                                           args.ReceivedInfo.DeliveryTag == DeliverTag &&
+                                                           args.ReceivedInfo.Exchange == "the_exchange" &&
+                                                           args.Body.ToArray().SequenceEqual(OriginalBody)),
+                Arg.Is<Exception>(e => e == exception),
+                Arg.Any<CancellationToken>()
             );
         }
 
@@ -42,7 +46,7 @@ namespace EasyNetQ.Tests.ConsumeTests
         [Fact]
         public void Should_dispose_of_the_consumer_error_strategy_when_the_bus_is_disposed()
         {
-            MockBuilder.Bus.Dispose();
+            MockBuilder.Dispose();
 
             ConsumerErrorStrategy.Received().Dispose();
         }

@@ -1,5 +1,6 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
+using System;
 using System.Linq;
 using EasyNetQ.ConnectionString;
 using FluentAssertions;
@@ -9,8 +10,8 @@ namespace EasyNetQ.Tests
 {
     public class ConnectionStringTests
     {
-        const string connectionStringValue =
-            "host=192.168.1.1:1001,my.little.host:1002;virtualHost=Copa;username=Copa;" + 
+        private const string connectionStringValue =
+            "host=192.168.1.1:1001,my.little.host:1002;virtualHost=Copa;username=Copa;" +
             "password=abc_xyz;port=12345;requestedHeartbeat=3";
         private ConnectionConfiguration connectionString;
 
@@ -74,17 +75,6 @@ namespace EasyNetQ.Tests
         }
 
         [Fact]
-        public void Should_fail_if_host_is_not_present()
-        {
-            Assert.Throws<EasyNetQException>(() =>
-            {
-
-                new ConnectionStringParser().Parse(
-                "virtualHost=Copa;username=Copa;password=abc_xyz;port=12345;requestedHeartbeat=3");
-            });
-        }
-
-        [Fact]
         public void Should_parse_port()
         {
             connectionString.Port.Should().Be(12345);
@@ -93,7 +83,7 @@ namespace EasyNetQ.Tests
         [Fact]
         public void Should_parse_heartbeat()
         {
-            connectionString.RequestedHeartbeat.Should().Be(3);
+            connectionString.RequestedHeartbeat.Should().Be(TimeSpan.FromSeconds(3));
         }
 
         [Fact]
@@ -129,7 +119,7 @@ namespace EasyNetQ.Tests
         [Fact]
         public void Should_set_default_requestHeartbeat()
         {
-            defaults.RequestedHeartbeat.Should().Be(10);
+            defaults.RequestedHeartbeat.Should().Be(TimeSpan.FromSeconds(10));
         }
 
         [Fact]
@@ -146,7 +136,7 @@ namespace EasyNetQ.Tests
             parsed.UserName.Should().Be("Copa");
             parsed.Password.Should().Be("abc_xyz");
             parsed.Port.Should().Be(12345);
-            parsed.RequestedHeartbeat.Should().Be(3);
+            parsed.RequestedHeartbeat.Should().Be(TimeSpan.FromSeconds(3));
         }
     }
 }

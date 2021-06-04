@@ -1,22 +1,20 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
+using EasyNetQ.Consumer;
+using NSubstitute;
+using RabbitMQ.Client;
 using System;
 using System.Threading.Tasks;
-using EasyNetQ.Consumer;
-using EasyNetQ.Events;
-using EasyNetQ.Internals;
 using Xunit;
-using RabbitMQ.Client;
-using NSubstitute;
 
 namespace EasyNetQ.Tests.HandlerRunnerTests
 {
     public class When_a_user_handler_is_cancelled
     {
         private readonly MessageProperties messageProperties = new MessageProperties
-            {
-                CorrelationId = "correlation_id"
-            };
+        {
+            CorrelationId = "correlation_id"
+        };
         private readonly MessageReceivedInfo messageInfo = new MessageReceivedInfo("consumer_tag", 42, false, "exchange", "routingKey", "queue");
         private readonly byte[] messageBody = new byte[0];
 
@@ -27,7 +25,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
         public When_a_user_handler_is_cancelled()
         {
             consumerErrorStrategy = Substitute.For<IConsumerErrorStrategy>();
-            consumerErrorStrategy.HandleConsumerCancelled(null).ReturnsForAnyArgs(AckStrategies.Ack);
+            consumerErrorStrategy.HandleConsumerCancelledAsync(default).ReturnsForAnyArgs(Task.FromResult(AckStrategies.Ack));
 
             var handlerRunner = new HandlerRunner(consumerErrorStrategy);
 
@@ -36,7 +34,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
             consumer.Model.Returns(channel);
 
             context = new ConsumerExecutionContext(
-                (body, properties, info, cancellation) => TaskHelpers.FromCancelled(),
+                (body, properties, info, cancellation) => Task.FromException<AckStrategy>(new OperationCanceledException()),
                 messageInfo,
                 messageProperties,
                 messageBody
@@ -45,7 +43,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
             var handlerTask = handlerRunner.InvokeUserMessageHandlerAsync(context, default)
                 .ContinueWith(async x =>
                 {
-                    var ackStrategy = await x.ConfigureAwait(false);
+                    var ackStrategy = await x;
                     return ackStrategy(channel, 42);
                 }, TaskContinuationOptions.ExecuteSynchronously)
                 .Unwrap();
@@ -55,11 +53,11 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
                 throw new TimeoutException();
             }
         }
-    
+
         [Fact]
-        public void Should_handle_consumer_cancelled()
+        public async Task Should_handle_consumer_cancelled()
         {
-            consumerErrorStrategy.Received().HandleConsumerCancelled(context);
+            await consumerErrorStrategy.Received().HandleConsumerCancelledAsync(context);
         }
 
         [Fact]

@@ -4,7 +4,7 @@ namespace EasyNetQ
 {
     /// <summary>
     /// Allows queue declaration configuration to be fluently extended without adding overloads to IBus
-    /// 
+    ///
     /// e.g.
     /// x => x.WithMaxPriority(42)
     /// </summary>
@@ -40,13 +40,13 @@ namespace EasyNetQ
         IQueueDeclareConfiguration WithArgument(string name, object value);
     }
 
-    public sealed class QueueDeclareConfiguration : IQueueDeclareConfiguration
+    internal class QueueDeclareConfiguration : IQueueDeclareConfiguration
     {
         public bool IsDurable { get; private set; } = true;
         public bool IsExclusive { get; private set; }
         public bool IsAutoDelete { get; private set; }
 
-        public IDictionary<string, object> Arguments { get; } = new Dictionary<string, object>();
+        public IDictionary<string, object> Arguments { get; private set; }
 
         public IQueueDeclareConfiguration AsDurable(bool isDurable)
         {
@@ -66,10 +66,9 @@ namespace EasyNetQ
             return this;
         }
 
-
         public IQueueDeclareConfiguration WithArgument(string name, object value)
         {
-            Arguments[name] = value;
+            (Arguments ??= new Dictionary<string, object>())[name] = value;
             return this;
         }
     }

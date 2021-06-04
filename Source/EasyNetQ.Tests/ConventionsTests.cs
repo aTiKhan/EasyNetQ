@@ -35,7 +35,7 @@ namespace EasyNetQ.Tests
         [Fact]
         public void The_default_error_queue_name_should_be()
         {
-            var result = conventions.ErrorQueueNamingConvention(new MessageReceivedInfo());
+            var result = conventions.ErrorQueueNamingConvention(null);
             result.Should().Be("EasyNetQ_Default_Error_Queue");
         }
 
@@ -114,7 +114,6 @@ namespace EasyNetQ.Tests
             result.Should().Be("MyQueue");
         }
 
-
         [Theory]
         [InlineData(typeof(EmptyQueueNameAnnotatedTestMessage))]
         [InlineData(typeof(IEmptyQueueNameAnnotatedTestMessage))]
@@ -162,21 +161,22 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private ITypeNameSerializer typeNameSerializer;
+        private readonly MockBuilder mockBuilder;
+        private readonly ITypeNameSerializer typeNameSerializer;
 
         [Fact]
         public void Should_use_exchange_name_from_conventions_as_the_exchange_to_publish_to()
         {
-            mockBuilder.Channels[0].Received().BasicPublish(
+            mockBuilder.Channels[1].Received().BasicPublish(
                 Arg.Is("CustomExchangeNamingConvention"),
                 Arg.Any<string>(),
                 Arg.Is(false),
                 Arg.Any<IBasicProperties>(),
-                Arg.Any<byte[]>());
+                Arg.Any<ReadOnlyMemory<byte>>()
+            );
         }
 
         [Fact]
@@ -187,18 +187,20 @@ namespace EasyNetQ.Tests
                 Arg.Is("topic"),
                 Arg.Is(true),
                 Arg.Is(false),
-                Arg.Is<Dictionary<string, object>>(x => x.SequenceEqual(new Dictionary<string, object>())));
+                Arg.Is((IDictionary<string, object>)null)
+            );
         }
 
         [Fact]
         public void Should_use_topic_name_from_conventions_as_the_topic_to_publish_to()
         {
-            mockBuilder.Channels[0].Received().BasicPublish(
+            mockBuilder.Channels[1].Received().BasicPublish(
                 Arg.Any<string>(),
                 Arg.Is("CustomTopicNamingConvention"),
                 Arg.Is(false),
                 Arg.Any<IBasicProperties>(),
-                Arg.Any<byte[]>());
+                Arg.Any<ReadOnlyMemory<byte>>()
+            );
         }
     }
 
@@ -219,10 +221,10 @@ namespace EasyNetQ.Tests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
 
         [Fact]
         public void Should_correctly_bind_using_new_conventions()
@@ -231,7 +233,8 @@ namespace EasyNetQ.Tests
                 Arg.Is("CustomRpcRoutingKeyName"),
                 Arg.Is("CustomRpcExchangeName"),
                 Arg.Is("CustomRpcRoutingKeyName"),
-                Arg.Is<Dictionary<string, object>>(x => x.SequenceEqual(new Dictionary<string, object>())));
+                Arg.Is((IDictionary<string, object>)null)
+            );
         }
 
         [Fact]
@@ -242,7 +245,7 @@ namespace EasyNetQ.Tests
                 Arg.Is("direct"),
                 Arg.Is(true),
                 Arg.Is(false),
-                Arg.Is<Dictionary<string, object>>(x => x.SequenceEqual(new Dictionary<string, object>())));
+                Arg.Is((IDictionary<string, object>)null));
         }
     }
 }

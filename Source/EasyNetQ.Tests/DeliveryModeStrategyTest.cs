@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Xunit;
 
 namespace EasyNetQ.Tests
@@ -8,12 +8,10 @@ namespace EasyNetQ.Tests
     {
     }
 
-
     [DeliveryMode(false)]
     public class NotPersistentMessageWithDeliveryAttribute
     {
     }
-
 
     public class MessageWithoutDeliveryAttribute
     {

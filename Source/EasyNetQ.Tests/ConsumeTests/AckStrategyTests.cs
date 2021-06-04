@@ -1,4 +1,4 @@
-﻿using EasyNetQ.Consumer;
+using EasyNetQ.Consumer;
 using EasyNetQ.Events;
 using NSubstitute;
 using RabbitMQ.Client;
@@ -15,8 +15,8 @@ namespace EasyNetQ.Tests.ConsumeTests
             result = AckStrategies.Ack(model, deliveryTag);
         }
 
-        private IModel model;
-        private AckResult result;
+        private readonly IModel model;
+        private readonly AckResult result;
         private const ulong deliveryTag = 1234;
 
         [Fact]
@@ -41,10 +41,9 @@ namespace EasyNetQ.Tests.ConsumeTests
             result = AckStrategies.NackWithoutRequeue(model, deliveryTag);
         }
 
-        private IModel model;
-        private AckResult result;
+        private readonly IModel model;
+        private readonly AckResult result;
         private const ulong deliveryTag = 1234;
-
 
         [Fact]
         public void Should_nack_message_and_not_requeue()
@@ -68,10 +67,9 @@ namespace EasyNetQ.Tests.ConsumeTests
             result = AckStrategies.NackWithRequeue(model, deliveryTag);
         }
 
-        private IModel model;
-        private AckResult result;
+        private readonly IModel model;
+        private readonly AckResult result;
         private const ulong deliveryTag = 1234;
-
 
         [Fact]
         public void Should_nack_message_and_requeue()

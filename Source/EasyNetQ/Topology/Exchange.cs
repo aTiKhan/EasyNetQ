@@ -1,10 +1,27 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace EasyNetQ.Topology
 {
-    public sealed class Exchange : IExchange
+    /// <summary>
+    ///     Represents an AMQP exchange
+    /// </summary>
+    public readonly struct Exchange : IBindable
     {
-        public Exchange(string name, string type = ExchangeType.Direct, bool durable = true, bool autoDelete = false, IDictionary<string, object> arguments = null)
+        /// <summary>
+        ///     Returns the default exchange
+        /// </summary>
+        public static Exchange Default { get; } = new Exchange("");
+
+        /// <summary>
+        ///     Creates Exchange
+        /// </summary>
+        public Exchange(
+            string name,
+            string type = ExchangeType.Direct,
+            bool durable = true,
+            bool autoDelete = false,
+            IDictionary<string, object> arguments = null
+        )
         {
             Preconditions.CheckNotNull(name, "name");
 
@@ -12,18 +29,32 @@ namespace EasyNetQ.Topology
             Type = type;
             IsDurable = durable;
             IsAutoDelete = autoDelete;
-            Arguments = arguments ?? new Dictionary<string, object>();
+            Arguments = arguments;
         }
 
+        /// <summary>
+        ///     The exchange name
+        /// </summary>
         public string Name { get; }
-        public string Type { get; }
-        public bool IsDurable { get; }
-        public bool IsAutoDelete { get; }
-        public IDictionary<string, object> Arguments { get; }
 
-        public static IExchange GetDefault()
-        {
-            return new Exchange("");
-        }
+        /// <summary>
+        ///     The exchange type
+        /// </summary>
+        public string Type { get; }
+
+        /// <summary>
+        ///     If set the exchange remains when a server restarts
+        /// </summary>
+        public bool IsDurable { get; }
+
+        /// <summary>
+        ///     If set the exchange is deleted when all consumers have finished using it
+        /// </summary>
+        public bool IsAutoDelete { get; }
+
+        /// <summary>
+        /// The exchange arguments.
+        /// </summary>
+        public IDictionary<string, object> Arguments { get; }
     }
 }

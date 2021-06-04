@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,6 @@ using EasyNetQ.Tests.Mocking;
 using FluentAssertions;
 using NSubstitute;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Framing;
 using Xunit;
 
 namespace EasyNetQ.Tests.ProducerTests
@@ -18,26 +17,19 @@ namespace EasyNetQ.Tests.ProducerTests
     {
         public When_a_request_is_sent()
         {
-            mockBuilder = new MockBuilder();
-
-            requestMessage = new TestRequestMessage();
-            responseMessage = new TestResponseMessage();
-
-            var correlationId = "";
-
-            mockBuilder.NextModel.WhenForAnyArgs(x => x.BasicPublish(null, null, false, null, null))
-                .Do(invocation =>
-                {
-                    var properties = (IBasicProperties) invocation[3];
-                    correlationId = properties.CorrelationId;
-                });
+            var correlationId = Guid.NewGuid().ToString();
+            mockBuilder = new MockBuilder(
+                c => c.Register<ICorrelationIdGenerationStrategy>(
+                    _ => new StaticCorrelationIdGenerationStrategy(correlationId)
+                )
+            );
 
             var waiter = new CountdownEvent(2);
 
             mockBuilder.EventBus.Subscribe<PublishedMessageEvent>(_ => waiter.Signal());
             mockBuilder.EventBus.Subscribe<StartConsumingSucceededEvent>(_ => waiter.Signal());
 
-            var task = mockBuilder.Rpc.RequestAsync<TestRequestMessage, TestResponseMessage>(requestMessage, c => { });
+            var task = mockBuilder.Rpc.RequestAsync<TestRequestMessage, TestResponseMessage>(new TestRequestMessage());
             if (!waiter.Wait(5000))
                 throw new TimeoutException();
 
@@ -48,18 +40,17 @@ namespace EasyNetQ.Tests.ProducerTests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
-        private TestRequestMessage requestMessage;
-        private TestResponseMessage responseMessage;
+        private readonly MockBuilder mockBuilder;
+        private readonly TestResponseMessage responseMessage;
 
-        protected void DeliverMessage(string correlationId)
+        private void DeliverMessage(string correlationId)
         {
             var properties = new BasicProperties
             {
-                Type = "EasyNetQ.Tests.TestResponseMessage, EasyNetQ.Tests.Common",
+                Type = "EasyNetQ.Tests.TestResponseMessage, EasyNetQ.Tests",
                 CorrelationId = correlationId
             };
             var body = Encoding.UTF8.GetBytes("{ Id:12, Text:\"Hello World\"}");
@@ -102,12 +93,12 @@ namespace EasyNetQ.Tests.ProducerTests
         [Fact]
         public void Should_publish_request_message()
         {
-            mockBuilder.Channels[0].Received().BasicPublish(
+            mockBuilder.Channels[2].Received().BasicPublish(
                 Arg.Is("easy_net_q_rpc"),
-                Arg.Is("EasyNetQ.Tests.TestRequestMessage, EasyNetQ.Tests.Common"),
+                Arg.Is("EasyNetQ.Tests.TestRequestMessage, EasyNetQ.Tests"),
                 Arg.Is(false),
                 Arg.Any<IBasicProperties>(),
-                Arg.Any<byte[]>()
+                Arg.Any<ReadOnlyMemory<byte>>()
             );
         }
 

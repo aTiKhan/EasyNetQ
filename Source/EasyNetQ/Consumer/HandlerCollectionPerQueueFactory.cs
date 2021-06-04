@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using EasyNetQ.Topology;
 
 namespace EasyNetQ.Consumer
@@ -7,7 +7,8 @@ namespace EasyNetQ.Consumer
     {
         private readonly ConcurrentDictionary<string, IHandlerCollection> handlerCollections = new ConcurrentDictionary<string, IHandlerCollection>();
 
-        public IHandlerCollection CreateHandlerCollection(IQueue queue)
+        /// <inheritdoc />
+        public IHandlerCollection CreateHandlerCollection(Queue queue)
         {
             return handlerCollections.GetOrAdd(queue.Name, _ => new HandlerCollection());
         }

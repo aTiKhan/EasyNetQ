@@ -4,10 +4,12 @@ using System.Reflection;
 
 namespace EasyNetQ
 {
+    /// <inheritdoc />
     public class LegacyTypeNameSerializer : ITypeNameSerializer
     {
         private readonly ConcurrentDictionary<string, Type> deserializedTypes = new ConcurrentDictionary<string, Type>();
 
+        /// <inheritdoc />
         public Type DeSerialize(string typeName)
         {
             Preconditions.CheckNotBlank(typeName, "typeName");
@@ -34,6 +36,7 @@ namespace EasyNetQ
 
         private readonly ConcurrentDictionary<Type, string> serializedTypes = new ConcurrentDictionary<Type, string>();
 
+        /// <inheritdoc />
         public string Serialize(Type type)
         {
             Preconditions.CheckNotNull(type, "type");

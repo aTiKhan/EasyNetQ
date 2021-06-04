@@ -1,13 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using EasyNetQ.Consumer;
 using EasyNetQ.Internals;
 using EasyNetQ.Topology;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace EasyNetQ
 {
+    /// <summary>
+    ///     Various extensions for IAdvancedBus
+    /// </summary>
     public static class AdvancedBusExtensions
     {
         /// <summary>
@@ -16,13 +19,15 @@ namespace EasyNetQ
         /// <typeparam name="T">The message type</typeparam>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to take messages from</param>
-        /// <param name="onMessage">The message handler</param>
+        /// <param name="handler">The message handler</param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume<T>(this IAdvancedBus bus, IQueue queue, Action<IMessage<T>, MessageReceivedInfo> onMessage)
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus, Queue queue, Action<IMessage<T>, MessageReceivedInfo> handler
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume(queue, onMessage, c => { });
+            return bus.Consume(queue, handler, c => { });
         }
 
         /// <summary>
@@ -31,16 +36,21 @@ namespace EasyNetQ
         /// <typeparam name="T">The message type</typeparam>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to take messages from</param>
-        /// <param name="onMessage">The message handler</param>
+        /// <param name="handler">The message handler</param>
         /// <param name="configure">
         /// Fluent configuration e.g. x => x.WithPriority(10)</param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume<T>(this IAdvancedBus bus, IQueue queue, Action<IMessage<T>, MessageReceivedInfo> onMessage, Action<IConsumerConfiguration> configure)
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus,
+            Queue queue,
+            Action<IMessage<T>, MessageReceivedInfo> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            var onMessageAsync = TaskHelpers.FromAction<IMessage<T>, MessageReceivedInfo>((m, i, c) => onMessage(m, i));
-            return bus.Consume(queue, onMessageAsync, configure);
+            var handlerAsync = TaskHelpers.FromAction<IMessage<T>, MessageReceivedInfo>((m, i, c) => handler(m, i));
+            return bus.Consume(queue, handlerAsync, configure);
         }
 
         /// <summary>
@@ -49,13 +59,15 @@ namespace EasyNetQ
         /// <typeparam name="T">The message type</typeparam>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to take messages from</param>
-        /// <param name="onMessage">The message handler</param>
+        /// <param name="handler">The message handler</param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume<T>(this IAdvancedBus bus, IQueue queue, Func<IMessage<T>, MessageReceivedInfo, Task> onMessage)
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus, Queue queue, Func<IMessage<T>, MessageReceivedInfo, Task> handler
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume(queue, onMessage, c => { });
+            return bus.Consume(queue, handler, c => { });
         }
 
         /// <summary>
@@ -64,16 +76,91 @@ namespace EasyNetQ
         /// <typeparam name="T">The message type</typeparam>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to take messages from</param>
-        /// <param name="onMessage">The message handler</param>
+        /// <param name="handler">The message handler</param>
         /// <param name="configure">
         /// Fluent configuration e.g. x => x.WithPriority(10)
         /// </param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume<T>(this IAdvancedBus bus, IQueue queue, Func<IMessage<T>, MessageReceivedInfo, Task> onMessage, Action<IConsumerConfiguration> configure)
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus,
+            Queue queue,
+            Func<IMessage<T>, MessageReceivedInfo, Task> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume<T>(queue, (m, i, c) => onMessage(m, i), configure);
+            return bus.Consume<T>(queue, (m, i, c) => handler(m, i), configure);
+        }
+
+        /// <summary>
+        /// Consume a stream of messages asynchronously
+        /// </summary>
+        /// <typeparam name="T">The message type</typeparam>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to take messages from</param>
+        /// <param name="handler">The message handler</param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus,
+            Queue queue,
+            Func<IMessage<T>, MessageReceivedInfo, CancellationToken, Task> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.Consume<T>(queue, async (m, i, c) =>
+            {
+                await handler(m, i, c).ConfigureAwait(false);
+                return AckStrategies.Ack;
+            }, configure);
+        }
+
+        /// <summary>
+        /// Consume a stream of messages asynchronously
+        /// </summary>
+        /// <typeparam name="T">The message type</typeparam>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to take messages from</param>
+        /// <param name="handler">The message handler</param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume<T>(
+            this IAdvancedBus bus,
+            Queue queue,
+            IMessageHandler<T> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            var consumeConfiguration = new SimpleConsumeConfiguration();
+            configure(consumeConfiguration);
+
+            return bus.Consume(c =>
+            {
+                if (consumeConfiguration.PrefetchCount.HasValue)
+                    c.WithPrefetchCount(consumeConfiguration.PrefetchCount.Value);
+                c.ForQueue(
+                    queue,
+                    handler,
+                    p =>
+                    {
+                        if (consumeConfiguration.ConsumerTag != null)
+                            p.WithConsumerTag(consumeConfiguration.ConsumerTag);
+                        if (consumeConfiguration.IsExclusive.HasValue)
+                            p.WithExclusive(consumeConfiguration.IsExclusive.Value);
+                        if (consumeConfiguration.Arguments != null)
+                            p.WithArguments(consumeConfiguration.Arguments);
+                    }
+                );
+            });
         }
 
         /// <summary>
@@ -83,7 +170,7 @@ namespace EasyNetQ
         /// <param name="queue">The queue to take messages from</param>
         /// <param name="addHandlers">A function to add handlers to the consumer</param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume(this IAdvancedBus bus, IQueue queue, Action<IHandlerRegistration> addHandlers)
+        public static IDisposable Consume(this IAdvancedBus bus, Queue queue, Action<IHandlerRegistration> addHandlers)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -91,20 +178,45 @@ namespace EasyNetQ
         }
 
         /// <summary>
-        /// Consume raw bytes from the queue.
+        /// Consume a stream of messages. Dispatch them to the given handlers
         /// </summary>
         /// <param name="bus">The bus instance</param>
-        /// <param name="queue">The queue to subscribe to</param>
-        /// <param name="onMessage">
-        /// The message handler. Takes the message body, message properties and some information about the
-        /// receive context.
+        /// <param name="queue">The queue to take messages from</param>
+        /// <param name="addHandlers">A function to add handlers to the consumer</param>
+        /// <param name="configure">
+        ///    Fluent configuration e.g. x => x.WithPriority(10)
         /// </param>
         /// <returns>A disposable to cancel the consumer</returns>
-        public static IDisposable Consume(this IAdvancedBus bus, IQueue queue, Action<byte[], MessageProperties, MessageReceivedInfo> onMessage)
+        public static IDisposable Consume(
+            this IAdvancedBus bus,
+            Queue queue,
+            Action<IHandlerRegistration> addHandlers,
+            Action<ISimpleConsumeConfiguration> configure
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume(queue, onMessage, c => { });
+            var consumeConfiguration = new SimpleConsumeConfiguration();
+            configure(consumeConfiguration);
+
+            return bus.Consume(c =>
+            {
+                if (consumeConfiguration.PrefetchCount.HasValue)
+                    c.WithPrefetchCount(consumeConfiguration.PrefetchCount.Value);
+                c.ForQueue(
+                    queue,
+                    addHandlers,
+                    p =>
+                    {
+                        if (consumeConfiguration.ConsumerTag != null)
+                            p.WithConsumerTag(consumeConfiguration.ConsumerTag);
+                        if (consumeConfiguration.IsExclusive.HasValue)
+                            p.WithExclusive(consumeConfiguration.IsExclusive.Value);
+                        if (consumeConfiguration.Arguments != null)
+                            p.WithArguments(consumeConfiguration.Arguments);
+                    }
+                );
+            });
         }
 
         /// <summary>
@@ -112,7 +224,26 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to subscribe to</param>
-        /// <param name="onMessage">
+        /// <param name="handler">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context.
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume(
+            this IAdvancedBus bus, Queue queue, Action<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo> handler
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.Consume(queue, handler, c => { });
+        }
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="handler">
         /// The message handler. Takes the message body, message properties and some information about the
         /// receive context.
         /// </param>
@@ -122,16 +253,16 @@ namespace EasyNetQ
         /// <returns>A disposable to cancel the consumer</returns>
         public static IDisposable Consume(
             this IAdvancedBus bus,
-            IQueue queue,
-            Action<byte[], MessageProperties, MessageReceivedInfo> onMessage,
-            Action<IConsumerConfiguration> configure
+            Queue queue,
+            Action<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo> handler,
+            Action<ISimpleConsumeConfiguration> configure
         )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            var onMessageAsync = TaskHelpers.FromAction<byte[], MessageProperties, MessageReceivedInfo>((m, p, i, c) => onMessage(m, p, i));
+            var handlerAsync = TaskHelpers.FromAction<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo>((m, p, i, c) => handler(m, p, i));
 
-            return bus.Consume(queue, onMessageAsync, configure);
+            return bus.Consume(queue, handlerAsync, configure);
         }
 
         /// <summary>
@@ -139,20 +270,20 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to subscribe to</param>
-        /// <param name="onMessage">
+        /// <param name="handler">
         /// The message handler. Takes the message body, message properties and some information about the
         /// receive context. Returns a Task.
         /// </param>
         /// <returns>A disposable to cancel the consumer</returns>
         public static IDisposable Consume(
             this IAdvancedBus bus,
-            IQueue queue,
-            Func<byte[], MessageProperties, MessageReceivedInfo, Task> onMessage
+            Queue queue,
+            Func<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo, Task> handler
         )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume(queue, onMessage, c => { });
+            return bus.Consume(queue, handler, c => { });
         }
 
         /// <summary>
@@ -160,7 +291,28 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to subscribe to</param>
-        /// <param name="onMessage">
+        /// <param name="handler">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context. Returns a Task.
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume(
+            this IAdvancedBus bus,
+            Queue queue,
+            Func<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo, Task<AckStrategy>> handler
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.Consume(queue, handler, c => { });
+        }
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="handler">
         /// The message handler. Takes the message body, message properties and some information about the
         /// receive context. Returns a Task.
         /// </param>
@@ -170,14 +322,114 @@ namespace EasyNetQ
         /// <returns>A disposable to cancel the consumer</returns>
         public static IDisposable Consume(
             this IAdvancedBus bus,
-            IQueue queue,
-            Func<byte[], MessageProperties, MessageReceivedInfo, Task> onMessage,
-            Action<IConsumerConfiguration> configure
+            Queue queue,
+            Func<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo, Task> handler,
+            Action<ISimpleConsumeConfiguration> configure
         )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.Consume(queue, (m, p, i, c) => onMessage(m, p, i), configure);
+            return bus.Consume(queue, (m, p, i, c) => handler(m, p, i), configure);
+        }
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="handler">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context. Returns a Task.
+        /// </param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume(
+            this IAdvancedBus bus,
+            Queue queue,
+            Func<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo, Task<AckStrategy>> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.Consume(queue, (m, p, i, c) => handler(m, p, i), configure);
+        }
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="handler">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context. Returns a Task.
+        /// </param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume(
+            this IAdvancedBus bus,
+            Queue queue,
+            Func<ReadOnlyMemory<byte>, MessageProperties, MessageReceivedInfo, CancellationToken, Task> handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.Consume(queue, async (m, p, i, c) =>
+            {
+                await handler(m, p, i, c).ConfigureAwait(false);
+                return AckStrategies.Ack;
+            }, configure);
+        }
+
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="handler">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context. Returns a Task.
+        /// </param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        public static IDisposable Consume(
+            this IAdvancedBus bus,
+            Queue queue,
+            MessageHandler handler,
+            Action<ISimpleConsumeConfiguration> configure
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            var consumeConfiguration = new SimpleConsumeConfiguration();
+            configure(consumeConfiguration);
+
+            return bus.Consume(c =>
+            {
+                if (consumeConfiguration.PrefetchCount.HasValue)
+                    c.WithPrefetchCount(consumeConfiguration.PrefetchCount.Value);
+                c.ForQueue(
+                    queue,
+                    handler,
+                    p =>
+                    {
+                        if (consumeConfiguration.ConsumerTag != null)
+                            p.WithConsumerTag(consumeConfiguration.ConsumerTag);
+                        if (consumeConfiguration.IsExclusive.HasValue)
+                            p.WithExclusive(consumeConfiguration.IsExclusive.Value);
+                        if (consumeConfiguration.Arguments != null)
+                            p.WithArguments(consumeConfiguration.Arguments);
+                    }
+                );
+            });
         }
 
         /// <summary>
@@ -199,11 +451,11 @@ namespace EasyNetQ
         /// <param name="cancellationToken">The cancellation token</param>
         public static void Publish(
             this IAdvancedBus bus,
-            IExchange exchange,
+            Exchange exchange,
             string routingKey,
             bool mandatory,
             MessageProperties messageProperties,
-            byte[] body,
+            ReadOnlyMemory<byte> body,
             CancellationToken cancellationToken = default
         )
         {
@@ -233,7 +485,7 @@ namespace EasyNetQ
         /// <param name="cancellationToken">The cancellation token</param>
         public static void Publish<T>(
             this IAdvancedBus bus,
-            IExchange exchange,
+            Exchange exchange,
             string routingKey,
             bool mandatory,
             IMessage<T> message,
@@ -248,50 +500,19 @@ namespace EasyNetQ
         }
 
         /// <summary>
-        /// Get a message from the given queue.
+        /// Gets stats for the given queue
         /// </summary>
-        /// <typeparam name="T">The message type to get</typeparam>
         /// <param name="bus">The bus instance</param>
-        /// <param name="queue">The queue from which to retrieve the message</param>
+        /// <param name="queue">The queue</param>
         /// <param name="cancellationToken">The cancellation token</param>
-        /// <returns>An IBasicGetResult.</returns>
-        public static IBasicGetResult<T> GetMessage<T>(this IAdvancedBus bus, IQueue queue, CancellationToken cancellationToken = default)
+        /// <returns>The stats of the queue</returns>
+        public static QueueStats GetQueueStats(
+            this IAdvancedBus bus, Queue queue, CancellationToken cancellationToken = default
+        )
         {
             Preconditions.CheckNotNull(bus, "bus");
 
-            return bus.GetMessageAsync<T>(queue, cancellationToken)
-                .GetAwaiter()
-                .GetResult();
-        }
-
-        /// <summary>
-        /// Get the raw message from the given queue.
-        /// </summary>
-        /// <param name="bus">The bus instance</param>
-        /// <param name="queue">The queue from which to retrieve the message</param>
-        /// <param name="cancellationToken">The cancellation token</param>
-        /// <returns>An IBasicGetResult</returns>
-        public static IBasicGetResult GetMessage(this IAdvancedBus bus, IQueue queue, CancellationToken cancellationToken = default)
-        {
-            Preconditions.CheckNotNull(bus, "bus");
-
-            return bus.GetMessageAsync(queue, cancellationToken)
-                .GetAwaiter()
-                .GetResult();
-        }
-
-        /// <summary>
-        /// Counts messages in the given queue
-        /// </summary>
-        /// <param name="bus">The bus instance</param>
-        /// <param name="queue">The queue in which to count messages</param>
-        /// <param name="cancellationToken">The cancellation token</param>
-        /// <returns>The number of counted messages</returns>
-        public static uint GetMessagesCount(this IAdvancedBus bus, IQueue queue, CancellationToken cancellationToken = default)
-        {
-            Preconditions.CheckNotNull(bus, "bus");
-
-            return bus.GetMessagesCountAsync(queue, cancellationToken)
+            return bus.GetQueueStatsAsync(queue, cancellationToken)
                 .GetAwaiter()
                 .GetResult();
         }
@@ -304,7 +525,7 @@ namespace EasyNetQ
         /// <param name="bus">The bus instance</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The queue</returns>
-        public static IQueue QueueDeclare(this IAdvancedBus bus, CancellationToken cancellationToken = default)
+        public static Queue QueueDeclare(this IAdvancedBus bus, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -318,12 +539,12 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="bus">The bus instance</param>
         /// <param name="name">The name of the queue</param>
-        /// <param name="configuration">The configuration of the queue</param>
+        /// <param name="configure">Delegate to configure the queue</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>
         /// The queue
         /// </returns>
-        public static IQueue QueueDeclare(
+        public static Queue QueueDeclare(
             this IAdvancedBus bus,
             string name,
             Action<IQueueDeclareConfiguration> configure,
@@ -337,7 +558,6 @@ namespace EasyNetQ
                 .GetResult();
         }
 
-
         /// <summary>
         /// Declare a queue. If the queue already exists this method does nothing
         /// </summary>
@@ -347,7 +567,7 @@ namespace EasyNetQ
         /// <returns>
         /// The queue
         /// </returns>
-        public static Task<IQueue> QueueDeclareAsync(
+        public static Task<Queue> QueueDeclareAsync(
             this IAdvancedBus bus,
             string name,
             CancellationToken cancellationToken = default
@@ -370,7 +590,7 @@ namespace EasyNetQ
         /// <returns>
         /// The queue
         /// </returns>
-        public static Task<IQueue> QueueDeclareAsync(
+        public static Task<Queue> QueueDeclareAsync(
             this IAdvancedBus bus,
             string name,
             bool durable,
@@ -402,7 +622,7 @@ namespace EasyNetQ
         /// <returns>
         /// The queue
         /// </returns>
-        public static IQueue QueueDeclare(
+        public static Queue QueueDeclare(
             this IAdvancedBus bus,
             string name,
             bool durable,
@@ -427,7 +647,7 @@ namespace EasyNetQ
         /// <returns>
         /// The queue
         /// </returns>
-        public static IQueue QueueDeclare(
+        public static Queue QueueDeclare(
             this IAdvancedBus bus,
             string name,
             CancellationToken cancellationToken = default
@@ -459,6 +679,27 @@ namespace EasyNetQ
                 .GetResult();
         }
 
+        /// <summary>
+        /// Bind two exchanges. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="source">The exchange</param>
+        /// <param name="queue">The queue</param>
+        /// <param name="routingKey">The routing key</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>A binding</returns>
+        public static Task<Binding<Queue>> BindAsync(
+            this IAdvancedBus bus,
+            Exchange source,
+            Queue queue,
+            string routingKey,
+            CancellationToken cancellationToken
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.BindAsync(source, queue, routingKey, null, cancellationToken);
+        }
 
         /// <summary>
         /// Bind two exchanges. Does nothing if the binding already exists.
@@ -469,7 +710,29 @@ namespace EasyNetQ
         /// <param name="routingKey">The routing key</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>A binding</returns>
-        public static IBinding Bind(this IAdvancedBus bus, IExchange source, IExchange destination, string routingKey, CancellationToken cancellationToken = default)
+        public static Task<Binding<Exchange>> BindAsync(
+            this IAdvancedBus bus,
+            Exchange source,
+            Exchange destination,
+            string routingKey,
+            CancellationToken cancellationToken
+        )
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            return bus.BindAsync(source, destination, routingKey, null, cancellationToken);
+        }
+
+        /// <summary>
+        /// Bind two exchanges. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="source">The source exchange</param>
+        /// <param name="destination">The destination exchange</param>
+        /// <param name="routingKey">The routing key</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>A binding</returns>
+        public static Binding<Exchange> Bind(this IAdvancedBus bus, Exchange source, Exchange destination, string routingKey, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -488,10 +751,10 @@ namespace EasyNetQ
         /// <param name="headers">The headers</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>A binding</returns>
-        public static IBinding Bind(
+        public static Binding<Exchange> Bind(
             this IAdvancedBus bus,
-            IExchange source,
-            IExchange destination,
+            Exchange source,
+            Exchange destination,
             string routingKey,
             IDictionary<string, object> headers,
             CancellationToken cancellationToken = default
@@ -513,7 +776,7 @@ namespace EasyNetQ
         /// <param name="routingKey">The routing key</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>A binding</returns>
-        public static IBinding Bind(this IAdvancedBus bus, IExchange exchange, IQueue queue, string routingKey, CancellationToken cancellationToken = default)
+        public static Binding<Queue> Bind(this IAdvancedBus bus, Exchange exchange, Queue queue, string routingKey, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -532,10 +795,10 @@ namespace EasyNetQ
         /// <param name="headers">The headers</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>A binding</returns>
-        public static IBinding Bind(
+        public static Binding<Queue> Bind(
             this IAdvancedBus bus,
-            IExchange exchange,
-            IQueue queue,
+            Exchange exchange,
+            Queue queue,
             string routingKey,
             IDictionary<string, object> headers,
             CancellationToken cancellationToken = default
@@ -548,7 +811,6 @@ namespace EasyNetQ
                 .GetResult();
         }
 
-
         /// <summary>
         /// Declare an exchange
         /// </summary>
@@ -559,7 +821,7 @@ namespace EasyNetQ
         /// <param name="autoDelete">If set, the exchange is deleted when all queues have finished using it.</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The exchange</returns>
-        public static Task<IExchange> ExchangeDeclareAsync(
+        public static Task<Exchange> ExchangeDeclareAsync(
             this IAdvancedBus bus,
             string name,
             string type,
@@ -602,7 +864,7 @@ namespace EasyNetQ
         /// <param name="autoDelete">If set, the exchange is deleted when all queues have finished using it.</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The exchange</returns>
-        public static IExchange ExchangeDeclare(
+        public static Exchange ExchangeDeclare(
             this IAdvancedBus bus,
             string name,
             string type,
@@ -626,7 +888,7 @@ namespace EasyNetQ
         /// <param name="configure">The configuration of exchange</param>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The exchange</returns>
-        public static IExchange ExchangeDeclare(
+        public static Exchange ExchangeDeclare(
             this IAdvancedBus bus,
             string name,
             Action<IExchangeDeclareConfiguration> configure,
@@ -640,6 +902,20 @@ namespace EasyNetQ
                 .GetResult();
         }
 
+        /// <summary>
+        /// Delete a binding
+        /// </summary>
+        /// <param name="bus">The bus instance</param>
+        /// <param name="binding">the binding to delete</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        public static void Unbind(this IAdvancedBus bus, Binding<Queue> binding, CancellationToken cancellationToken = default)
+        {
+            Preconditions.CheckNotNull(bus, "bus");
+
+            bus.UnbindAsync(binding, cancellationToken)
+                .GetAwaiter()
+                .GetResult();
+        }
 
         /// <summary>
         /// Delete a binding
@@ -647,7 +923,7 @@ namespace EasyNetQ
         /// <param name="bus">The bus instance</param>
         /// <param name="binding">the binding to delete</param>
         /// <param name="cancellationToken">The cancellation token</param>
-        public static void Unbind(this IAdvancedBus bus, IBinding binding, CancellationToken cancellationToken = default)
+        public static void Unbind(this IAdvancedBus bus, Binding<Exchange> binding, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -664,7 +940,7 @@ namespace EasyNetQ
         /// <param name="ifUnused">Only delete if unused</param>
         /// <param name="ifEmpty">Only delete if empty</param>
         /// <param name="cancellationToken">The cancellation token</param>
-        public static void QueueDelete(this IAdvancedBus bus, IQueue queue, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default)
+        public static void QueueDelete(this IAdvancedBus bus, Queue queue, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -679,7 +955,7 @@ namespace EasyNetQ
         /// <param name="bus">The bus instance</param>
         /// <param name="queue">The queue to purge</param>
         /// <param name="cancellationToken">The cancellation token</param>
-        public static void QueuePurge(this IAdvancedBus bus, IQueue queue, CancellationToken cancellationToken = default)
+        public static void QueuePurge(this IAdvancedBus bus, Queue queue, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
@@ -695,13 +971,45 @@ namespace EasyNetQ
         /// <param name="exchange">The exchange to delete</param>
         /// <param name="ifUnused">If set, the server will only delete the exchange if it has no queue bindings.</param>
         /// <param name="cancellationToken">The cancellation token</param>
-        public static void ExchangeDelete(this IAdvancedBus bus, IExchange exchange, bool ifUnused = false, CancellationToken cancellationToken = default)
+        public static void ExchangeDelete(this IAdvancedBus bus, Exchange exchange, bool ifUnused = false, CancellationToken cancellationToken = default)
         {
             Preconditions.CheckNotNull(bus, "bus");
 
             bus.ExchangeDeleteAsync(exchange, ifUnused, cancellationToken)
                 .GetAwaiter()
                 .GetResult();
+        }
+
+        private class SimpleConsumeConfiguration : ISimpleConsumeConfiguration
+        {
+            public string ConsumerTag { get; private set; }
+            public bool? IsExclusive { get; private set; }
+            public ushort? PrefetchCount { get; private set; }
+            public IDictionary<string, object> Arguments { get; private set; }
+
+            public ISimpleConsumeConfiguration WithConsumerTag(string consumerTag)
+            {
+                ConsumerTag = consumerTag;
+                return this;
+            }
+
+            public ISimpleConsumeConfiguration WithExclusive(bool isExclusive = true)
+            {
+                IsExclusive = isExclusive;
+                return this;
+            }
+
+            public ISimpleConsumeConfiguration WithArgument(string name, object value)
+            {
+                (Arguments ??= new Dictionary<string, object>())[name] = value;
+                return this;
+            }
+
+            public ISimpleConsumeConfiguration WithPrefetchCount(ushort prefetchCount)
+            {
+                PrefetchCount = prefetchCount;
+                return this;
+            }
         }
     }
 }

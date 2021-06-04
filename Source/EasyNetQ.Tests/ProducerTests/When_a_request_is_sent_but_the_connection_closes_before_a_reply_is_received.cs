@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using EasyNetQ.Producer;
@@ -18,10 +18,10 @@ namespace EasyNetQ.Tests.ProducerTests
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
-        private MockBuilder mockBuilder;
+        private readonly MockBuilder mockBuilder;
 
         [Fact]
         public void Should_throw_an_EasyNetQException()
@@ -29,8 +29,8 @@ namespace EasyNetQ.Tests.ProducerTests
             Assert.Throws<EasyNetQException>(() =>
             {
                 var task = mockBuilder.Rpc.RequestAsync<TestRequestMessage, TestResponseMessage>(new TestRequestMessage());
-                mockBuilder.Connection.ConnectionShutdown += Raise.EventWith(null, new ShutdownEventArgs(new ShutdownInitiator(), 0, null));
-                (mockBuilder.Connection as IRecoverable).Recovery += Raise.EventWith(null, new EventArgs());
+                mockBuilder.Connection.ConnectionShutdown += Raise.EventWith(null, new ShutdownEventArgs(ShutdownInitiator.Application, 0, null));
+                (mockBuilder.Connection as IAutorecoveringConnection).RecoverySucceeded += Raise.EventWith(null, new EventArgs());
                 task.GetAwaiter().GetResult();
             });
         }

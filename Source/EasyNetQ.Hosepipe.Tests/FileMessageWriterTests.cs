@@ -1,9 +1,8 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EasyNetQ.Tests;
 using Xunit;
 
 namespace EasyNetQ.Hosepipe.Tests
@@ -12,7 +11,8 @@ namespace EasyNetQ.Hosepipe.Tests
     {
         private readonly string tempDirectory = Path.Combine(Path.GetTempPath(), @"MessageOutput");
 
-        [Fact][Explicit("Writes files to the file system")]
+        [Fact]
+        [Traits.Explicit("Writes files to the file system")]
         public void WriteSomeFiles()
         {
             var directory = new DirectoryInfo(tempDirectory);

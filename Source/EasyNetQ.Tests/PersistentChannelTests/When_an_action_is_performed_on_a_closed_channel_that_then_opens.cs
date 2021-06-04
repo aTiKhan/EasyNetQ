@@ -1,7 +1,6 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System.Threading;
-using EasyNetQ.AmqpExceptions;
 using EasyNetQ.Events;
 using EasyNetQ.Producer;
 using NSubstitute;
@@ -15,36 +14,32 @@ namespace EasyNetQ.Tests.PersistentChannelTests
     {
         public When_an_action_is_performed_on_a_closed_channel_that_then_opens()
         {
-            persistentConnection = Substitute.For<IPersistentConnection>();
+            var persistentConnection = Substitute.For<IPersistentConnection>();
             channel = Substitute.For<IModel, IRecoverable>();
             var eventBus = new EventBus();
-            var configuration = new ConnectionConfiguration();
 
             var shutdownArgs = new ShutdownEventArgs(
                 ShutdownInitiator.Peer,
-                AmqpException.ConnectionClosed,
-                "connection closed by peer");
+                AmqpErrorCodes.ConnectionClosed,
+                "connection closed by peer"
+            );
             var exception = new OperationInterruptedException(shutdownArgs);
 
-            persistentConnection.CreateModel().Returns(x => { throw exception; },
-                x => channel,
-                x => channel);
+            persistentConnection.CreateModel().Returns(
+                x => throw exception, x => channel, x => channel
+            );
 
-            persistentChannel = new PersistentChannel(persistentConnection, configuration, eventBus);
-
-            new Timer(_ => eventBus.Publish(new ConnectionCreatedEvent()), null, 10, Timeout.Infinite);
-
+            var persistentChannel = new PersistentChannel(
+                new PersistentChannelOptions(), persistentConnection, eventBus
+            );
             persistentChannel.InvokeChannelAction(x => x.ExchangeDeclare("MyExchange", "direct"));
         }
 
-        private IPersistentChannel persistentChannel;
-        private IPersistentConnection persistentConnection;
-        private IModel channel;
+        private readonly IModel channel;
 
         [Fact]
         public void Should_run_action_on_channel()
         {
-            Thread.Sleep(100);
             channel.Received().ExchangeDeclare("MyExchange", "direct");
         }
     }

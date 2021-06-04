@@ -1,4 +1,4 @@
-﻿namespace EasyNetQ.Hosepipe.Tests
+namespace EasyNetQ.Hosepipe.Tests
 {
     public static class Helper
     {
@@ -11,7 +11,7 @@
                 "exchange_name",
                 "routing_key",
                 "queue_name"
-                );
+            );
         }
     }
 }

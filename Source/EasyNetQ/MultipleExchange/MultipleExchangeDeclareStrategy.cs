@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyNetQ.Internals;
@@ -7,11 +7,12 @@ using EasyNetQ.Topology;
 
 namespace EasyNetQ.MultipleExchange
 {
+    /// <inheritdoc />
     public class MultipleExchangeDeclareStrategy : IExchangeDeclareStrategy
     {
         private readonly IAdvancedBus advancedBus;
         private readonly IConventions conventions;
-        private readonly AsyncCache<ExchangeKey, IExchange> declaredExchanges;
+        private readonly AsyncCache<ExchangeKey, Exchange> declaredExchanges;
 
         public MultipleExchangeDeclareStrategy(IConventions conventions, IAdvancedBus advancedBus)
         {
@@ -21,10 +22,11 @@ namespace EasyNetQ.MultipleExchange
             this.conventions = conventions;
             this.advancedBus = advancedBus;
 
-            declaredExchanges = new AsyncCache<ExchangeKey, IExchange>((k, c) => advancedBus.ExchangeDeclareAsync(k.Name, k.Type, cancellationToken: c));
+            declaredExchanges = new AsyncCache<ExchangeKey, Exchange>((k, c) => advancedBus.ExchangeDeclareAsync(k.Name, k.Type, cancellationToken: c));
         }
 
-        public async Task<IExchange> DeclareExchangeAsync(Type messageType, string exchangeType, CancellationToken cancellationToken)
+        /// <inheritdoc />
+        public async Task<Exchange> DeclareExchangeAsync(Type messageType, string exchangeType, CancellationToken cancellationToken)
         {
             var sourceExchangeName = conventions.ExchangeNamingConvention(messageType);
             var sourceExchange = await DeclareExchangeAsync(sourceExchangeName, exchangeType, cancellationToken).ConfigureAwait(false);
@@ -33,21 +35,20 @@ namespace EasyNetQ.MultipleExchange
             foreach (var @interface in interfaces)
             {
                 var destinationExchangeName = conventions.ExchangeNamingConvention(@interface);
-                var destinationExchange =
-                    await DeclareExchangeAsync(destinationExchangeName, exchangeType, cancellationToken).ConfigureAwait(false);
-                if (destinationExchange != null)
-                    await advancedBus.BindAsync(sourceExchange, destinationExchange, "#", cancellationToken).ConfigureAwait(false);
+                var destinationExchange = await DeclareExchangeAsync(destinationExchangeName, exchangeType, cancellationToken).ConfigureAwait(false);
+                await advancedBus.BindAsync(sourceExchange, destinationExchange, "#", cancellationToken).ConfigureAwait(false);
             }
 
             return sourceExchange;
         }
 
-        public Task<IExchange> DeclareExchangeAsync(string exchangeName, string exchangeType, CancellationToken cancellationToken)
+        /// <inheritdoc />
+        public Task<Exchange> DeclareExchangeAsync(string exchangeName, string exchangeType, CancellationToken cancellationToken)
         {
             return declaredExchanges.GetOrAddAsync(new ExchangeKey(exchangeName, exchangeType), cancellationToken);
         }
 
-        private struct ExchangeKey
+        private readonly struct ExchangeKey
         {
             public ExchangeKey(string name, string type)
             {

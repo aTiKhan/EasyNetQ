@@ -1,12 +1,9 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyNetQ.Events;
-using EasyNetQ.Internals;
-using EasyNetQ.Producer;
 using EasyNetQ.Tests.Mocking;
-using RabbitMQ.Client.Framing;
 using Xunit;
 
 namespace EasyNetQ.Tests.ConsumeTests
@@ -29,14 +26,19 @@ namespace EasyNetQ.Tests.ConsumeTests
             typeNameSerializer = mockBuilder.Bus.Advanced.Container.Resolve<ITypeNameSerializer>();
             serializer = mockBuilder.Bus.Advanced.Container.Resolve<ISerializer>();
 
-            mockBuilder.Rpc.Respond<RpcRequest, RpcResponse>(m => TaskHelpers.FromCancelled<RpcResponse>());
+            mockBuilder.Rpc.Respond<RpcRequest, RpcResponse>(m =>
+            {
+                var tcs = new TaskCompletionSource<RpcResponse>();
+                tcs.SetCanceled();
+                return tcs.Task;
+            });
 
             DeliverMessage(new RpcRequest { Value = 42 });
         }
 
         public void Dispose()
         {
-            mockBuilder.Bus.Dispose();
+            mockBuilder.Dispose();
         }
 
         [Fact]
@@ -51,12 +53,12 @@ namespace EasyNetQ.Tests.ConsumeTests
         {
             var properties = new BasicProperties
             {
-                Type = typeNameSerializer.Serialize(request.GetType()),
+                Type = typeNameSerializer.Serialize(typeof(RpcRequest)),
                 CorrelationId = "the_correlation_id",
-                ReplyTo = conventions.RpcReturnQueueNamingConvention()
+                ReplyTo = conventions.RpcReturnQueueNamingConvention(typeof(RpcResponse))
             };
 
-            var body = serializer.MessageToBytes(typeof(RpcRequest), request);
+            var serializedMessage = serializer.MessageToBytes(typeof(RpcRequest), request);
 
             var waiter = new CountdownEvent(2);
             mockBuilder.EventBus.Subscribe<PublishedMessageEvent>(x =>
@@ -77,13 +79,13 @@ namespace EasyNetQ.Tests.ConsumeTests
                 "the_exchange",
                 "the_routing_key",
                 properties,
-                body
+                serializedMessage.Memory
             );
 
             if (!waiter.Wait(5000))
                 throw new TimeoutException();
         }
-        
+
         private class RpcRequest
         {
             public int Value { get; set; }

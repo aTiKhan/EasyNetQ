@@ -1,4 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 
 using System;
 using System.Threading.Tasks;
@@ -23,12 +23,13 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
             consumer.Model.Returns(channel);
 
             var context = new ConsumerExecutionContext(
-                (body, properties, info, cancellation) => Task.Run(() =>
+                (body, properties, info, cancellation) =>
                 {
                     deliveredBody = body;
                     deliveredProperties = properties;
                     deliveredInfo = info;
-                }),
+                    return Task.FromResult(AckStrategies.Ack);
+                },
                 messageInfo,
                 messageProperties,
                 messageBody
@@ -37,7 +38,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
             var handlerTask = handlerRunner.InvokeUserMessageHandlerAsync(context, default)
                 .ContinueWith(async x =>
                 {
-                    var ackStrategy = await x.ConfigureAwait(false);
+                    var ackStrategy = await x;
                     return ackStrategy(channel, 42);
                 }, TaskContinuationOptions.ExecuteSynchronously)
                 .Unwrap();
@@ -48,7 +49,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
             }
         }
 
-        private byte[] deliveredBody;
+        private ReadOnlyMemory<byte> deliveredBody;
         private MessageProperties deliveredProperties;
         private MessageReceivedInfo deliveredInfo;
 
@@ -71,7 +72,7 @@ namespace EasyNetQ.Tests.HandlerRunnerTests
         [Fact]
         public void Should_deliver_body()
         {
-            deliveredBody.Should().BeSameAs(messageBody);
+            deliveredBody.ToArray().Should().BeEquivalentTo(messageBody);
         }
 
         [Fact]

@@ -2,8 +2,8 @@
 
 using System;
 using System.Text;
+using System.Threading.Tasks;
 using EasyNetQ.Consumer;
-using EasyNetQ.Internals;
 using EasyNetQ.Tests.Mocking;
 using NSubstitute;
 using RabbitMQ.Client;
@@ -23,22 +23,23 @@ namespace EasyNetQ.Tests
 
             mockBuilder = new MockBuilder();
 
-            var connection = new PersistentConnection(new ConnectionConfiguration(), mockBuilder.ConnectionFactory, new EventBus());
-            connection.Initialize();
+            var connectionConfiguration = new ConnectionConfiguration();
+            var connection = new PersistentConnection(connectionConfiguration, mockBuilder.ConnectionFactory, new EventBus());
 
             errorStrategy = new DefaultConsumerErrorStrategy(
                 connection,
                 new JsonSerializer(),
                 customConventions,
                 new DefaultTypeNameSerializer(),
-                new DefaultErrorMessageSerializer()
+                new DefaultErrorMessageSerializer(),
+                connectionConfiguration
             );
 
             const string originalMessage = "";
             var originalMessageBody = Encoding.UTF8.GetBytes(originalMessage);
 
-            var context = new ConsumerExecutionContext(
-                (bytes, properties, info, cancellation) => TaskHelpers.Completed,
+            consumerExecutionContext = new ConsumerExecutionContext(
+                (bytes, properties, info, cancellation) => Task.FromResult(AckStrategies.Ack),
                 new MessageReceivedInfo("consumerTag", 0, false, "orginalExchange", "originalRoutingKey", "queue"),
                 new MessageProperties
                 {
@@ -47,44 +48,41 @@ namespace EasyNetQ.Tests
                 },
                 originalMessageBody
             );
-
-            try
-            {
-                errorAckStrategy = errorStrategy.HandleConsumerError(context, new Exception());
-                cancelAckStrategy = errorStrategy.HandleConsumerCancelled(context);
-            }
-            catch (Exception)
-            {
-                // swallow
-            }
         }
 
         private DefaultConsumerErrorStrategy errorStrategy;
         private MockBuilder mockBuilder;
-        private AckStrategy errorAckStrategy;
-        private AckStrategy cancelAckStrategy;
+        private ConsumerExecutionContext consumerExecutionContext;
 
         [Fact]
-        public void Should_Ack_canceled_message()
+        public async Task Should_Ack_canceled_message()
         {
+            var cancelAckStrategy = await errorStrategy.HandleConsumerCancelledAsync(consumerExecutionContext, default);
+
             Assert.Same(AckStrategies.NackWithRequeue, cancelAckStrategy);
         }
 
         [Fact]
-        public void Should_Ack_failed_message()
+        public async Task Should_Ack_failed_message()
         {
+            var errorAckStrategy = await errorStrategy.HandleConsumerErrorAsync(consumerExecutionContext, new Exception(), default);
+
             Assert.Same(AckStrategies.Ack, errorAckStrategy);
         }
 
         [Fact]
-        public void Should_use_exchange_name_from_custom_names_provider()
+        public async Task Should_use_exchange_name_from_custom_names_provider()
         {
+            await errorStrategy.HandleConsumerErrorAsync(consumerExecutionContext, new Exception(), default);
+
             mockBuilder.Channels[0].Received().ExchangeDeclare("CustomErrorExchangePrefixName.originalRoutingKey", "direct", true);
         }
 
         [Fact]
-        public void Should_use_queue_name_from_custom_names_provider()
+        public async Task Should_use_queue_name_from_custom_names_provider()
         {
+            await errorStrategy.HandleConsumerErrorAsync(consumerExecutionContext, new Exception(), default);
+
             mockBuilder.Channels[0].Received().QueueDeclare("CustomEasyNetQErrorQueueName", true, false, false, null);
         }
     }
